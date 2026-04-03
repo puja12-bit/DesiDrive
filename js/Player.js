@@ -1,4 +1,5 @@
 import { Input } from './Input.js';
+import { Assets } from './Assets.js';
 
 export class Player {
     constructor(x, y) {
@@ -60,11 +61,15 @@ export class Player {
         ctx.shadowColor = this.color;
         ctx.shadowBlur = 10;
         
-        ctx.fillRect(-this.width/2, -this.height/2, this.width, this.height);
-        
-        // Windshield
-        ctx.fillStyle = '#0b0f19';
-        ctx.fillRect(-this.width/2 + 4, -this.height/2 + 10, this.width - 8, 15);
+        if (Assets.car.complete && Assets.car.naturalWidth > 0) {
+            ctx.drawImage(Assets.car, -this.width/2, -this.height/2, this.width, this.height);
+        } else {
+            ctx.fillRect(-this.width/2, -this.height/2, this.width, this.height);
+            
+            // Windshield
+            ctx.fillStyle = '#0b0f19';
+            ctx.fillRect(-this.width/2 + 4, -this.height/2 + 10, this.width - 8, 15);
+        }
 
         ctx.shadowBlur = 0; // reset
 

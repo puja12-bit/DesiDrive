@@ -1,3 +1,5 @@
+import { Assets } from './Assets.js';
+
 export class PedestrianManager {
     constructor() {
         this.peds = [];
@@ -54,10 +56,25 @@ export class PedestrianManager {
 
     draw(ctx) {
         for (let p of this.peds) {
-            ctx.fillStyle = p.color;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.width/2, 0, Math.PI * 2);
-            ctx.fill();
+            if (Assets.npc.complete && Assets.npc.naturalWidth > 0) {
+                // The sprite npcfemalemovedown.png has 3 frames
+                let frameWidth = Assets.npc.naturalWidth / 3;
+                let frameHeight = Assets.npc.naturalHeight;
+                
+                let frame = 0;
+                if (p.state === 'crossing') {
+                    frame = Math.floor(Date.now() / 150) % 3;
+                }
+                
+                let w = p.width * 2;
+                let h = p.width * 2;
+                ctx.drawImage(Assets.npc, frame * frameWidth, 0, frameWidth, frameHeight, p.x - w/2, p.y - h/2, w, h);
+            } else {
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.width/2, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
     }
 

@@ -1,3 +1,5 @@
+import { Assets } from './Assets.js';
+
 export class TrafficManager {
     constructor() {
         this.vehicles = [];
@@ -95,17 +97,33 @@ export class TrafficManager {
 
     draw(ctx) {
         for (let v of this.vehicles) {
-            ctx.fillStyle = v.color;
-            ctx.fillRect(v.x, v.y, v.width, v.height);
-            
-            // Some detail based on type
-            if (v.type === 'car') {
-                ctx.fillStyle = '#111';
-                ctx.fillRect(v.x + 2, v.y + 10, v.width - 4, 15);
-            } else if (v.type === 'auto') {
-                // black canopy top
-                ctx.fillStyle = '#222';
-                ctx.fillRect(v.x, v.y + 10, v.width, v.height - 10);
+            if (Assets.car.complete && Assets.car.naturalWidth > 0) {
+                ctx.save();
+                ctx.translate(v.x + v.width/2, v.y + v.height/2);
+                
+                let hue = 0;
+                if (v.color === '#f00') hue = 0;
+                else if (v.color === '#00aaff') hue = 210;
+                else if (v.color === '#ffcc00') hue = 60;
+                else hue = 120; // cycle
+                
+                ctx.filter = `hue-rotate(${hue}deg)`;
+                // Cars in traffic might be flipped vertically to seem like they are going the other way
+                // if they are facing us, or they're just going same dir
+                // Assuming they go same dir (slower than us)
+                ctx.drawImage(Assets.car, -v.width/2, -v.height/2, v.width, v.height);
+                ctx.restore();
+            } else {
+                ctx.fillStyle = v.color;
+                ctx.fillRect(v.x, v.y, v.width, v.height);
+                
+                if (v.type === 'car') {
+                    ctx.fillStyle = '#111';
+                    ctx.fillRect(v.x + 2, v.y + 10, v.width - 4, 15);
+                } else if (v.type === 'auto') {
+                    ctx.fillStyle = '#222';
+                    ctx.fillRect(v.x, v.y + 10, v.width, v.height - 10);
+                }
             }
         }
     }

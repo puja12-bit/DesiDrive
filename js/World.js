@@ -1,3 +1,5 @@
+import { Assets } from './Assets.js';
+
 export class World {
     constructor() {
         this.speed = 0; // Tied to player speed
@@ -25,6 +27,21 @@ export class World {
         // Draw sidewalks / off-road
         ctx.fillStyle = '#222';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Render repeating environment pattern
+        if (Assets.tiles.complete && Assets.tiles.naturalWidth > 0) {
+            // Assuming tiles are ~32x32
+            const tileSize = 32;
+            const yStart = (this.offsetY % tileSize) - tileSize;
+            for (let y = yStart; y < canvas.height; y += tileSize) {
+                for (let x = 0; x < this.roadLeft; x += tileSize) {
+                    ctx.drawImage(Assets.tiles, 0, 0, 32, 32, x, y, tileSize, tileSize);
+                }
+                for (let x = this.roadRight; x < canvas.width; x += tileSize) {
+                    ctx.drawImage(Assets.tiles, 32, 0, 32, 32, x, y, tileSize, tileSize); // using another tile
+                }
+            }
+        }
 
         // Draw main road
         ctx.fillStyle = '#111';
