@@ -319,6 +319,7 @@
         let GLOBAL_SCORE = localStorage.getItem('v8_score') ? parseInt(localStorage.getItem('v8_score')) : 0;
         let MAP_UNLOCKS = localStorage.getItem('v8_maps') ? parseInt(localStorage.getItem('v8_maps')) : 0;
         let UNLOCKED_VEHICLES = localStorage.getItem('v8_vehicles') ? JSON.parse(localStorage.getItem('v8_vehicles')) : ['hjonda'];
+        let HAS_UNLOCKED_THIS_SESSION = false;
 
         const VEHICLES = [
             { id: 'hjonda', tier: 'BIKE', name: 'HJONDA SPLENDER', cost: 0, s: 12, a: 0.1, sp: SPRITES.bike, w:10, h:16 },
@@ -570,7 +571,7 @@
                             else crashReason = "FATAL TRAFFIC CRASH";
                             break;
                         } else {
-                            if (p.speed > 5 && !e.nearMissed && (e.t === 'v' || e.t === 'p' || e.t === 'buf' || e.t === 'cow')) {
+                            if (p.speed > 5 && !e.nearMissed && sy >= 640 && (e.t === 'v' || e.t === 'p' || e.t === 'buf' || e.t === 'cow')) {
                                 nearMissLog.push(e);
                             }
                         }
