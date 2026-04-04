@@ -349,10 +349,26 @@
                 window.addEventListener('keyup', e => { this.keys[e.key] = false; });
 
                 this.lastTap = { l: 0, r: 0 };
+
+                const updateTouchSteering = (e) => {
+                    if (!this.isPlaying) return;
+                    this.keys.ArrowLeft = false;
+                    this.keys.ArrowRight = false;
+                    let hasLeft = false, hasRight = false;
+                    for (let i = 0; i < e.touches.length; i++) {
+                        if (e.touches[i].clientX < window.innerWidth / 2) hasLeft = true;
+                        else hasRight = true;
+                    }
+                    this.keys.ArrowLeft = hasLeft;
+                    this.keys.ArrowRight = hasRight;
+                };
+
                 window.addEventListener('touchstart', e => {
                     if (!this.isPlaying) return;
-                    for (let i = 0; i < e.touches.length; i++) {
-                        const touch = e.touches[i];
+                    updateTouchSteering(e);
+                    
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
                         const now = performance.now();
                         if (touch.clientX < window.innerWidth / 2) {
                             if (now - this.lastTap.l < 300) {
@@ -371,6 +387,10 @@
                         }
                     }
                 }, { passive: true });
+
+                window.addEventListener('touchmove', e => { updateTouchSteering(e); }, { passive: true });
+                window.addEventListener('touchend', e => { updateTouchSteering(e); }, { passive: true });
+                window.addEventListener('touchcancel', e => { updateTouchSteering(e); }, { passive: true });
 
                 this.isPlaying = false; this.boundLoop = this.loop.bind(this);
             }
