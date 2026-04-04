@@ -672,6 +672,9 @@
                 }
 
                 let pw = p.w*0.8, ph = p.h*0.8; let pr = { l: p.x - pw/2, r: p.x + pw/2, t: p.y - ph/2, b: p.y + ph/2 };
+                let crashReason = null;
+                let nearMissLog = [];
+
                 for(let e of this.em) {
                     let sy = 650 - (e.logY - p.logY);
                     
@@ -684,17 +687,26 @@
                     
                     if(!(nm.l > pr.r || nm.r < pr.l || nm.t > pr.b || nm.b < pr.t)) {
                         if(!(er.l > pr.r || er.r < pr.l || er.t > pr.b || er.b < pr.t)) {
-                            if(e.t === 'cow') return this.stop("HIT A COW - INSTANT JAIL");
-                            else if(e.t === 'buf') return this.stop("HIT A BUFFALO - TOTALED");
-                            else if(e.t === 'p') return this.stop("HIT PEDESTRIAN");
-                            else return this.stop("FATAL TRAFFIC CRASH");
+                            if(e.t === 'cow') crashReason = "HIT A COW - INSTANT JAIL";
+                            else if(e.t === 'buf') crashReason = "HIT A BUFFALO - TOTALED";
+                            else if(e.t === 'p') crashReason = "HIT PEDESTRIAN";
+                            else crashReason = "FATAL TRAFFIC CRASH";
+                            break;
                         } else {
-                            if (p.speed > 5 && !e.nearMissed && (e.t === 'v' || e.t === 'p')) {
-                                e.nearMissed = true;
-                                this.stats.nearMisses++;
-                                this.addScore(20, "NEAR MISS");
+                            if (p.speed > 5 && !e.nearMissed && (e.t === 'v' || e.t === 'p' || e.t === 'buf' || e.t === 'cow')) {
+                                nearMissLog.push(e);
                             }
                         }
+                    }
+                }
+
+                if (crashReason) {
+                    return this.stop(crashReason);
+                } else {
+                    for (let e of nearMissLog) {
+                        e.nearMissed = true;
+                        if(this.stats.nearMiss !== undefined) this.stats.nearMiss++; else if(this.stats.nearMisses !== undefined) this.stats.nearMisses++;
+                        this.addScore(20, "NEAR MISS");
                     }
                 }
 
