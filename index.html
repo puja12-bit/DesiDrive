@@ -417,21 +417,30 @@
                     else if (this.stats.suddenBrake > 0 || this.stats.noSignalTurn > 0) title = "Control Thoda Kam Hai";
                 }
 
-                let mistakes = [];
-                if (this.stats.noSignalTurn > 0) mistakes.push(`<span style="color:#ff3333">Indicator avoid kiya</span> (${this.stats.noSignalTurn}x)`);
-                if (this.stats.suddenBrake > 0) mistakes.push(`<span style="color:#ff5500">Brake late tha</span> 😬`);
-                if (this.stats.unnecessaryStop > 0) mistakes.push(`<span style="color:#ff5500">Zyada wait kiya</span> 🐢`);
+                let feedsHtml = "";
+                if (isCrash || reason === "OUT OF FUEL") {
+                    let crashFeed = "";
+                    if (reason === "HIT PEDESTRIAN") crashFeed = `<span style="color:#ff0055">Police are on the way. You are under arrest! 🚓</span>`;
+                    else if (reason.includes("COW") || reason.includes("BUFFALO")) crashFeed = `<span style="color:#ff0055">Locals are angry! Negotiation failed. 🐄😡</span>`;
+                    else crashFeed = `<span style="color:#ff0055">Insurance claim denied. Drive carefully! 🚗💥</span>`;
+                    feedsHtml = `<p style="color:#cccccc; text-shadow:0 0 5px #000; font-size:0.8rem; line-height:1.8; margin-bottom:15px; font-family:inherit; text-align:left;">• ${crashFeed}</p>`;
+                } else {
+                    let mistakes = [];
+                    if (this.stats.noSignalTurn > 0) mistakes.push(`<span style="color:#ff3333">Indicator avoid kiya</span> (${this.stats.noSignalTurn}x)`);
+                    if (this.stats.suddenBrake > 0) mistakes.push(`<span style="color:#ff5500">Brake late tha</span> 😬`);
+                    if (this.stats.unnecessaryStop > 0) mistakes.push(`<span style="color:#ff5500">Zyada wait kiya</span> 🐢`);
 
-                let perf = [];
-                if (this.stats.nearMiss > 0) perf.push(`Close call! 🔥 <span style="color:#ffaa00">Near misses: ${this.stats.nearMiss}</span>`);
-                else perf.push(`<span style="color:#00ff66">Good control</span> 👍`);
-
-                let feeds = [];
-                if (mistakes.length > 0) feeds.push(mistakes[Math.floor(Math.random() * mistakes.length)]);
-                else feeds.push(`<span style="color:#00ff66">Rule follow kiya</span> 🛡️`);
-                feeds.push(perf[0]);
-                
-                let feedsHtml = feeds.map(f => `<p style="color:#cccccc; font-size:0.8rem; line-height:1.8; margin-bottom:15px; font-family:inherit; text-align:left;">• ${f}</p>`).join('');
+                    let feeds = [];
+                    if (mistakes.length > 0) {
+                        feeds.push(mistakes[Math.floor(Math.random() * mistakes.length)]);
+                        feeds.push(`<span style="color:#ffaa00">Improve your driving next run!</span>`);
+                    } else {
+                        feeds.push(`<span style="color:#00ff66">Rule follow kiya</span> 🛡️`);
+                        if (this.stats.nearMiss > 0) feeds.push(`Close call! 🔥 <span style="color:#ffaa00">Near misses: ${this.stats.nearMiss}</span>`);
+                        else feeds.push(`<span style="color:#00ff66">Good control</span> 👍`);
+                    }
+                    feedsHtml = feeds.map(f => `<p style="color:#cccccc; text-shadow:0 0 5px #000; font-size:0.8rem; line-height:1.8; margin-bottom:15px; font-family:inherit; text-align:left;">• ${f}</p>`).join('');
+                }
 
                 document.getElementById('hud-screen').classList.add('hidden');
                 document.getElementById('game-over-screen').classList.remove('hidden');

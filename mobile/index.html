@@ -127,7 +127,7 @@
                 <!-- Explicit Instruction Block -->
                 <div class="instruction-manual">
                     <h3>CONTROLS</h3>
-                    <p style="color:#00ffff">> [UP ARROW] Accelerate<br>> [DOWN ARROW] Brake<br>> [LEFT/RIGHT ARROW] Steer / Switch Lanes<br>> [Q] / [E] Explicit Turning Indicators</p>
+                    <p style="color:#00ffff">> Hold screen to accelerate<br>> Slide left/right to steer<br>> Double tap left/right for indicator</p>
                     
                     <h3>OBJECTIVES</h3>
                     <p>> Do not idle! Fuel runs out constantly. Earn Fuel by making strictly safe plays (Safe indicator turns, stopping at pure Reds).<br>> Score is shared to unlock Vehicles or new Maps!</p>
@@ -187,10 +187,13 @@
             </div>
 
             <div id="game-over-screen" class="screen hidden" style="justify-content:center;">
-                <h1 class="red" style="font-size: 2rem;">WASTED!</h1>
-                <p id="game-over-reason" style="color:#ff0055; margin: 1rem 0; font-size: 1rem; line-height:1.5; text-shadow:0 0 10px #ff0055; text-align:center;"></p>
-                <div id="game-over-stats" style="text-align:left; font-size:0.7rem; margin-bottom:1rem; color:#aaa; max-width: 400px; padding: 1rem; border: 1px solid #333; background: #111; line-height: 1.8;"></div>
-                <p class="center-p">PTS EARNED: <span id="final-score" style="color:#00ffff"></span></p>
+                <h1 id="game-over-title" class="red" style="font-size: 1.6rem; line-height:1.4; text-shadow: 0 0 10px #ff0055; margin-bottom:0.5rem; text-align:center;">WASTED!</h1>
+                <p id="game-over-reason" style="color:#ff0055; margin: 1rem 0; font-size: 0.8rem; line-height:1.5; text-shadow:0 0 10px #ff0055; text-align:center;"></p>
+                
+                <div style="background:rgba(0,0,0,0.8); border:2px solid #555; padding:1.5rem; width:90%; max-width:400px; margin-bottom:1.5rem;">
+                    <p style="color:#00ffff; font-size:1rem; text-align:left; margin-bottom:15px; font-weight:bold;">SCORE: <span id="final-score">0</span></p>
+                    <div id="smart-feedback-container" style="text-align:left; margin-top:15px;"></div>
+                </div>
                 <div class="btn-group" style="margin-top: 2rem;">
                     <button id="btn-restart-retry">TRY AGAIN</button>
                     <button id="btn-restart-menu">PLAY BETTER ROUTE</button>
@@ -431,29 +434,74 @@
             stop(reason) {
                 this.isPlaying = false;
                 GLOBAL_SCORE += Math.floor(this.score); saveProgress();
-                document.getElementById('hud-screen').classList.add('hidden');
+                HAS_UNLOCKED_THIS_SESSION = false;
                 
-                const lostPts = (this.stats.indicatorMisses * 5) + (this.stats.laneViolations * 20) + (this.stats.signalViolations * 50);
-                let advice = "";
-                if (this.stats.indicatorMisses > 0) advice += `Missed ${this.stats.indicatorMisses} indicators &rarr; +${this.stats.indicatorMisses * 5} possible points lost.<br>`;
-                if (this.stats.laneViolations > 0) advice += `Lane violations &rarr; +${this.stats.laneViolations * 20} possible points lost.<br>`;
-                if (this.stats.signalViolations > 0) advice += `Skipped ${this.stats.signalViolations} signals &rarr; +${this.stats.signalViolations * 50} possible points lost.<br>`;
-                if (lostPts > 0) advice += `<br><span style="color:#ffaa00">Improve your score by ${lostPts}+ points next run!</span>`;
-                else advice += `<br><span style="color:#00ff66">Flawless safe driving!</span>`;
+                let isCrash = reason.includes("HIT") || reason.includes("FATAL") || reason.includes("ACCIDENT");
+                let trb = this.strikes + this.laneStrikes;
+                let messy = this.stats.suddenBrake > 2 && trb > 0;
+                
+                let title = "Traffic Police Is Watching 👀";
+                let displayReason = reason;
 
-                const statHtml = `
-                    <b>PERFORMANCE SUMMARY:</b><br>
-                    - Indicators Missed: ${this.stats.indicatorMisses}<br>
-                    - Lane Violations: ${this.stats.laneViolations}<br>
-                    - Signal Violations: ${this.stats.signalViolations}<br>
-                    - Near Misses: ${this.stats.nearMisses}<br><br>
-                    ${advice}
-                `;
-                
+                if (reason === "HIT PEDESTRIAN") {
+                    title = "License Suspended 🚫";
+                    displayReason = "Pedestrian hit \u2013 you are arrested 👮";
+                } else if (reason.includes("COW") || reason.includes("BUFFALO")) {
+                    title = "Gaadi Rok! 🐄";
+                    displayReason = "Owner se baat karo 😅 (negotiation pending)";
+                } else if (reason === "FATAL TRAFFIC CRASH") {
+                    let msgs = [
+                        "Bhagwan se milne ka plan tha kya? 😏",
+                        "Brake nahi, prarthana kar rahe the kya? 🙏",
+                        "Seedha upar jaane ka plan? 😬",
+                        "Brake late tha boss 😬",
+                        "Distance maintain karo 🚗"
+                    ];
+                    title = msgs[Math.floor(Math.random() * msgs.length)];
+                    let subs = [ "Gaadi thok di boss 🚗💥", "Seedha takkar ho gayi 😬" ];
+                    displayReason = subs[Math.floor(Math.random() * subs.length)];
+                } else if (reason === "OUT OF FUEL") {
+                    title = "Gaadi Bandh! 🛑";
+                    displayReason = "Fuel khatam. Time management fail!";
+                } else {
+                    if (this.stats.noSignalTurn > 2 || this.strikes > 0) title = "Signal Missed, Boss!";
+                    else if (trb >= 3) title = "License Suspended 🚫";
+                    else if (messy) title = "Arre Bhai... Kya Kar Rahe Ho?";
+                    else if (this.stats.suddenBrake + this.stats.noSignalTurn > 3) title = "That Was Not Smooth 😬";
+                    else if (this.stats.suddenBrake > 0 || this.stats.noSignalTurn > 0) title = "Control Thoda Kam Hai";
+                }
+
+                let feedsHtml = "";
+                if (isCrash || reason === "OUT OF FUEL") {
+                    let crashFeed = "";
+                    if (reason === "HIT PEDESTRIAN") crashFeed = `<span style="color:#ff0055">Police are on the way. You are under arrest! 🚓</span>`;
+                    else if (reason.includes("COW") || reason.includes("BUFFALO")) crashFeed = `<span style="color:#ff0055">Locals are angry! Negotiation failed. 🐄😡</span>`;
+                    else crashFeed = `<span style="color:#ff0055">Insurance claim denied. Drive carefully! 🚗💥</span>`;
+                    feedsHtml = `<p style="color:#cccccc; text-shadow:0 0 5px #000; font-size:0.8rem; line-height:1.8; margin-bottom:15px; font-family:inherit; text-align:left;">• ${crashFeed}</p>`;
+                } else {
+                    let mistakes = [];
+                    if (this.stats.noSignalTurn > 0) mistakes.push(`<span style="color:#ff3333">Indicator avoid kiya</span> (${this.stats.noSignalTurn}x)`);
+                    if (this.stats.suddenBrake > 0) mistakes.push(`<span style="color:#ff5500">Brake late tha</span> 😬`);
+                    if (this.stats.unnecessaryStop > 0) mistakes.push(`<span style="color:#ff5500">Zyada wait kiya</span> 🐢`);
+
+                    let feeds = [];
+                    if (mistakes.length > 0) {
+                        feeds.push(mistakes[Math.floor(Math.random() * mistakes.length)]);
+                        feeds.push(`<span style="color:#ffaa00">Improve your driving next run!</span>`);
+                    } else {
+                        feeds.push(`<span style="color:#00ff66">Rule follow kiya</span> 🛡️`);
+                        if (this.stats.nearMiss > 0) feeds.push(`Close call! 🔥 <span style="color:#ffaa00">Near misses: ${this.stats.nearMiss}</span>`);
+                        else feeds.push(`<span style="color:#00ff66">Good control</span> 👍`);
+                    }
+                    feedsHtml = feeds.map(f => `<p style="color:#cccccc; text-shadow:0 0 5px #000; font-size:0.8rem; line-height:1.8; margin-bottom:15px; font-family:inherit; text-align:left;">• ${f}</p>`).join('');
+                }
+
+                document.getElementById('hud-screen').classList.add('hidden');
                 document.getElementById('game-over-screen').classList.remove('hidden');
-                document.getElementById('game-over-reason').innerText = reason;
-                document.getElementById('game-over-stats').innerHTML = statHtml;
+                document.getElementById('game-over-title').innerText = title;
+                document.getElementById('game-over-reason').innerText = displayReason;
                 document.getElementById('final-score').innerText = Math.floor(this.score);
+                document.getElementById('smart-feedback-container').innerHTML = feedsHtml;
             }
 
             msg(t, bad=false) {
