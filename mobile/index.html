@@ -266,6 +266,48 @@
                 let vF = this.ctx.createBiquadFilter(); vF.type='lowpass'; vF.frequency.value = 1500;
                 o.connect(vF); vF.connect(g); g.connect(this.ctx.destination);
                 o.start(t); o.stop(t+3); this.ambNode = o;
+            },
+            engineNode: null,
+            engineGain: null,
+            engineLFO: null,
+            engineType: null,
+            playEngine(type) {
+                this.init();
+                if (!this.ctx || this.ctx.state !== 'running') return;
+                if (this.engineType === type && this.engineNode) return; 
+                this.stopEngine();
+                this.engineType = type;
+                let t = this.ctx.currentTime;
+                this.engineGain = this.ctx.createGain();
+                this.engineGain.gain.value = 0.05;
+                this.engineGain.connect(this.ctx.destination);
+                this.engineNode = this.ctx.createOscillator();
+                if (type === 'thump') {
+                    this.engineNode.type = 'sawtooth'; this.engineNode.frequency.value = 45;
+                    this.engineLFO = this.ctx.createOscillator(); this.engineLFO.type = 'square'; this.engineLFO.frequency.value = 8;
+                    let lfoGain = this.ctx.createGain(); lfoGain.gain.value = 25;
+                    this.engineLFO.connect(lfoGain); lfoGain.connect(this.engineNode.frequency);
+                    this.engineLFO.start(t);
+                    let filter = this.ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 400;
+                    this.engineNode.connect(filter); filter.connect(this.engineGain);
+                } else if (type === 'fast') {
+                    this.engineNode.type = 'sawtooth'; this.engineNode.frequency.value = 160;
+                    let filter = this.ctx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 1200;
+                    this.engineNode.connect(filter); filter.connect(this.engineGain);
+                } else if (type === 'smooth') {
+                    this.engineNode.type = 'triangle'; this.engineNode.frequency.value = 90;
+                    this.engineNode.connect(this.engineGain);
+                } else {
+                    this.engineNode.type = 'sawtooth'; this.engineNode.frequency.value = 80;
+                    let filter = this.ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 600;
+                    this.engineNode.connect(filter); filter.connect(this.engineGain);
+                }
+                this.engineNode.start(t);
+            },
+            stopEngine() {
+                if (this.engineNode) { try { this.engineNode.stop(); } catch(e){} this.engineNode = null; }
+                if (this.engineLFO) { try { this.engineLFO.stop(); } catch(e){} this.engineLFO = null; }
+                this.engineType = null;
             }
         };
 
@@ -362,20 +404,29 @@
             hum1: gen(8, 8, dHum1, PALS.human), hum2: gen(8, 8, dHum2, PALS.human),
             tree: gen(20, 20, dTree, PALS.tree), shop: gen(30, 15, dShop, PALS.shop), house: gen(30, 20, dHouse, PALS.house),
             cow: gen(12, 12, dCow, PALS.cow), buffalo: gen(16, 16, dBuff, PALS.buffalo),
-            bike: gen(10,16, dBike, PALS.bike), auto: gen(12,14, dAuto, PALS.auto),
-            bwm: createBoxySprite(20, 36, '#ffffff', '#111', '#222'), bus: createBoxySprite(30, 60, '#00ff66', '#222', '#111')
+            bike: gen(10,16, dBike, PALS.bike),
+            bikeBlue: gen(10,16, dBike, {1:'#0055ff', 2:'#00aaff', 3:'#fff', 4:'#111'}),
+            bikeBlack: gen(10,16, dBike, {1:'#222', 2:'#444', 3:'#fff', 4:'#000'}),
+            bikeGreen: gen(10,16, dBike, {1:'#00ff00', 2:'#55ff55', 3:'#fff', 4:'#111'}),
+            auto: gen(12,14, dAuto, PALS.auto),
+            bwm: createBoxySprite(20, 36, '#ffffff', '#111', '#222'),
+            bwmWhite: createBoxySprite(24, 40, '#ffffff', '#e0e0e0', '#222'),
+            bus: createBoxySprite(30, 60, '#00ff66', '#222', '#111')
         };
 
         let GLOBAL_SCORE = localStorage.getItem('v8_score') ? parseInt(localStorage.getItem('v8_score')) : 0;
         let MAP_UNLOCKS = localStorage.getItem('v8_maps') ? parseInt(localStorage.getItem('v8_maps')) : 0;
         let UNLOCKED_VEHICLES = localStorage.getItem('v8_vehicles') ? JSON.parse(localStorage.getItem('v8_vehicles')) : ['hjonda'];
+        if(UNLOCKED_VEHICLES.includes('hindo') && !UNLOCKED_VEHICLES.includes('ninja')) {
+            UNLOCKED_VEHICLES.push('ninja'); localStorage.setItem('v8_vehicles', JSON.stringify(UNLOCKED_VEHICLES));
+        }
         let HAS_UNLOCKED_THIS_SESSION = false;
 
         const VEHICLES = [
-            { id: 'hjonda', tier: 'BIKE', name: 'HJONDA SPLENDER', cost: 0, s: 12, a: 0.1, sp: SPRITES.bike, w:10, h:16 },
-            { id: 'bullett', tier: 'BIKE', name: 'BULLETT ENFIELD', cost: 500, s: 14, a: 0.08, sp: SPRITES.bike, w:10, h:18 },
-            { id: 'hindo', tier: 'CAR', name: 'HINDO I20', cost: 5000, s: 15, a: 0.15, sp: SPRITES.bwm, w:20, h:36 },
-            { id: 'bwm', tier: 'CAR', name: 'BWM M-SERIES', cost: 12000, s: 22, a: 0.25, sp: SPRITES.bwm, w:24, h:40 }
+            { id: 'hjonda', tier: 'BIKE', name: 'HONDA SPLENDER', cost: 0, s: 12, a: 0.1, sp: SPRITES.bikeBlue, w:10, h:16, eSound: 'generic' },
+            { id: 'bullett', tier: 'BIKE', name: 'BULLETT ENFIELD', cost: 500, s: 14, a: 0.08, sp: SPRITES.bikeBlack, w:10, h:18, eSound: 'thump' },
+            { id: 'ninja', tier: 'BIKE', name: 'NINJA ZX', cost: 5000, s: 18, a: 0.2, sp: SPRITES.bikeGreen, w:10, h:16, eSound: 'fast' },
+            { id: 'bwm', tier: 'CAR', name: 'BWM M-SERIES', cost: 12000, s: 22, a: 0.25, sp: SPRITES.bwmWhite, w:24, h:40, eSound: 'smooth' }
         ];
 
         const MAPS = [
@@ -491,6 +542,7 @@
             }
 
             stop(reason) {
+                if (typeof AudioSys !== 'undefined') AudioSys.stopEngine();
                 this.isPlaying = false;
                 GLOBAL_SCORE += Math.floor(this.score); saveProgress();
                 HAS_UNLOCKED_THIS_SESSION = false;
@@ -665,6 +717,14 @@
 
                 let brake = this.keys.ArrowDown; let accel = this.keys.ArrowUp;
                 
+                let speedToCheck = accel ? p.speed + this.vConf.a : (brake ? p.speed - 0.6 : p.speed - 0.05);
+
+                if (p.speed > 0.5) {
+                    if (typeof AudioSys !== 'undefined') AudioSys.playEngine(this.vConf.eSound || 'generic');
+                } else {
+                    if (typeof AudioSys !== 'undefined') AudioSys.stopEngine();
+                }
+
                 if(accel) p.speed += this.vConf.a;
                 else if(brake) p.speed -= 0.6; else p.speed -= 0.05;
                 if(p.speed < 0) p.speed = 0; if(p.speed > this.vConf.s) p.speed = this.vConf.s;
