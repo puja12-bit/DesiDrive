@@ -672,6 +672,9 @@
                             e.x += e.sx * (dt/16); 
                             if(e.t==='p') { e.animT += dt; } // increment walking cycle
                         }
+                        if (e.t === 'buf') {
+                            e.x += Math.sin(Date.now() * 0.002) * 0.3; // subtle anti-ghosting wobble
+                        }
                     }
                     if(e.logY < p.logY - 200 || e.x < -100 || e.x > 700) this.em.splice(i,1);
                 }
@@ -771,10 +774,25 @@
                     if (e.t === 'v') {
                         this.ctx.shadowColor = '#000'; this.ctx.shadowBlur = 10;
                         this.ctx.drawImage(e.sp, e.x - e.w, sy - e.h, e.w*2, e.h*2); 
-                    } else if (e.t === 'cow' || e.t === 'buf') {
+                    } else if (e.t === 'cow') {
                         // NO GLOW as requested. Simple sharp hard-edge pixel drawing!
                         this.ctx.shadowBlur = 0;
                         this.ctx.drawImage(e.sp, e.x - (e.w*2.5)/2, sy - (e.h*2.5)/2, e.w*2.5, e.h*2.5);
+                    } else if (e.t === 'buf') {
+                        this.ctx.shadowBlur = 0;
+                        let w = e.w * 2.4; 
+                        let h = e.h * 2.4;
+                        
+                        this.ctx.filter = "contrast(1.3) brightness(1.1)";
+                        this.ctx.drawImage(e.sp, e.x - w/2, sy - h/2, w, h);
+                        this.ctx.filter = "none";
+                        
+                        this.ctx.fillStyle = "rgba(0,0,0,0.25)";
+                        this.ctx.fillRect(e.x - w/2, sy + h/3, w, h/6);
+                        
+                        this.ctx.strokeStyle = "rgba(0,0,0,0.6)";
+                        this.ctx.lineWidth = 2;
+                        this.ctx.strokeRect(e.x - w/2, sy - h/2, w, h);
                     } else if (e.t === 'p') {
                         // Human needs strict outline but no soft ambient glow
                         this.ctx.shadowBlur = 0;
