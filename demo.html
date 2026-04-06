@@ -127,7 +127,7 @@
                 <!-- Explicit Instruction Block -->
                 <div class="instruction-manual">
                     <h3>CONTROLS</h3>
-                    <p style="color:#00ffff">> Hold screen to accelerate<br>> Slide left/right to steer<br>> Double tap left/right for indicator</p>
+                    <p style="color:#00ffff">> [UP ARROW] Accelerate<br>> [DOWN ARROW] Brake<br>> [LEFT/RIGHT ARROW] Steer / Switch Lanes<br>> [Q] / [E] Explicit Turning Indicators</p>
                     
                     <h3>OBJECTIVES</h3>
                     <p>> Do not idle! Fuel runs out constantly. Earn Fuel by making strictly safe plays (Safe indicator turns, stopping at pure Reds).<br>> Score is shared to unlock Vehicles or new Maps!</p>
@@ -139,6 +139,7 @@
                 <hr style="width: 80%; border-color:#333; margin: 1rem 0;">
 
                 <h2>PTS: <span id="global-score-ui">0</span></h2>
+                <div style="text-align:center; width:100%; margin-bottom:1rem;"><span id="next-unlock-info" style="color:#ff0055; font-size:0.7rem; text-shadow:0 0 5px #ff0055;"></span></div>
                 <p class="center-p">UNLOCK VEHICLE <span style="color:#fff">OR</span> MAP</p>
                 
                 <div class="garage-preview" id="garage-preview-container">
@@ -149,8 +150,6 @@
                 <p id="vehicle-stats" style="font-size:0.6rem; color:#aaa; text-align:center;"></p>
                 
                 <div class="btn-group" id="vehicle-list"></div>
-                
-                <div id="garage-progression-feedback" style="text-align:center; font-size:0.7rem; color:#aaa; margin:1rem 0; border:1px solid #333; padding: 1rem;"></div>
                 
                 <hr style="width: 80%; border-color:#333; margin: 1rem 0;">
                 
@@ -184,6 +183,8 @@
                     </div>
                 </div>
                 <div id="messages-area"></div>
+                <div id="pre-entry-sign" class="floating-sign" style="opacity: 0; position: absolute; top: 120px; right: 20px; font-size: 1.2rem; color: #ffaa00; text-shadow: 0 0 10px #ffaa00; transition: opacity 0.5s;">1 KM TO ROAD</div>
+                <div id="entry-banner" class="center-banner" style="opacity: 0; position: absolute; top: 40%; left: 0; width: 100%; text-align: center; font-size: 2.2rem; color: #00ff66; text-shadow: 0 0 20px #00ff66; font-weight: bold; background: rgba(0,0,0,0.7); padding: 20px 0; border-top: 2px solid #00ff66; border-bottom: 2px solid #00ff66; transition: opacity 0.3s; pointer-events: none;">WELCOME</div>
             </div>
 
             <div id="game-over-screen" class="screen hidden" style="justify-content:center;">
@@ -194,20 +195,17 @@
                     <p style="color:#00ffff; font-size:1rem; text-align:left; margin-bottom:15px; font-weight:bold;">SCORE: <span id="final-score">0</span></p>
                     <div id="smart-feedback-container" style="text-align:left; margin-top:15px;"></div>
                 </div>
-                <div class="btn-group" style="margin-top: 2rem;">
-                    <button id="btn-restart-retry">TRY AGAIN</button>
-                    <button id="btn-restart-menu">PLAY BETTER ROUTE</button>
+
+                <div class="btn-group">
+                    <button id="btn-restart" style="min-width: 140px;">GARAGE</button>
+                    <button id="btn-try-again" style="min-width: 140px; color: #ff0055; border-color: #ff0055; box-shadow: 0 0 15px rgba(255,0,85,0.4);">CONTINUE JOURNEY</button>
                 </div>
             </div>
             
             <div id="level-complete-screen" class="screen hidden" style="justify-content:center;">
                 <h1 class="green" style="font-size: 1.5rem;">ARRIVED</h1>
-                <div id="win-stats" style="text-align:left; font-size:0.7rem; margin:1rem 0; color:#aaa; max-width: 400px; padding: 1rem; border: 1px solid #333; background: #111; line-height: 1.8;"></div>
                 <p class="center-p">PTS EARNED: <span id="win-score" style="color:#00ffff"></span></p>
-                <div class="btn-group" style="margin-top: 2rem;">
-                    <button id="btn-next-retry">PLAY AGAIN</button>
-                    <button id="btn-next-menu">ROUTES / UPGRADES</button>
-                </div>
+                <button id="btn-next" style="margin-top: 1rem;">RETURN</button>
             </div>
         </div>
     </div>
@@ -430,8 +428,8 @@
         const VEHICLES = [
             { id: 'hjonda', tier: 'BIKE', name: 'HONDA SPLENDER', cost: 0, s: 12, a: 0.1, sp: SPRITES.bikeBlue, w:10, h:16, eSound: 'generic' },
             { id: 'bullett', tier: 'BIKE', name: 'BULLETT ENFIELD', cost: 500, s: 14, a: 0.08, sp: SPRITES.bikeBlack, w:10, h:18, eSound: 'thump' },
-            { id: 'ninja', tier: 'BIKE', name: 'NINJA ZX', cost: 5000, s: 18, a: 0.2, sp: SPRITES.bikeGreen, w:10, h:16, eSound: 'fast' },
-            { id: 'bwm', tier: 'CAR', name: 'BWM M-SERIES', cost: 12000, s: 22, a: 0.25, sp: SPRITES.bwmWhite, w:24, h:40, eSound: 'smooth' }
+            { id: 'ninja', tier: 'BIKE', name: 'NINJA ZX', cost: 3000, s: 18, a: 0.2, sp: SPRITES.bikeGreen, w:10, h:16, eSound: 'fast' },
+            { id: 'bwm', tier: 'CAR', name: 'BWM M-SERIES', cost: 6000, s: 22, a: 0.25, sp: SPRITES.bwmWhite, w:24, h:40, eSound: 'smooth' }
         ];
 
         const MAPS = [
@@ -458,57 +456,6 @@
                     if(e.key==='e' || e.key==='E') { this.ind.r = !this.ind.r; this.ind.l = false; this.updateUIIndicators(); }
                 });
                 window.addEventListener('keyup', e => { this.keys[e.key] = false; });
-
-                this.lastTap = { l: 0, r: 0 };
-
-                const updateTouchSteering = (e) => {
-                    if (!this.isPlaying) {
-                        this.keys.ArrowUp = false;
-                        this.keys.ArrowLeft = false;
-                        this.keys.ArrowRight = false;
-                        return;
-                    }
-                    this.keys.ArrowUp = e.touches.length > 0;
-                    this.keys.ArrowLeft = false;
-                    this.keys.ArrowRight = false;
-                    let hasLeft = false, hasRight = false;
-                    for (let i = 0; i < e.touches.length; i++) {
-                        if (e.touches[i].clientX < window.innerWidth * 0.4) hasLeft = true;
-                        else if (e.touches[i].clientX > window.innerWidth * 0.6) hasRight = true;
-                    }
-                    this.keys.ArrowLeft = hasLeft;
-                    this.keys.ArrowRight = hasRight;
-                };
-
-                window.addEventListener('touchstart', e => {
-                    if (!this.isPlaying) return;
-                    updateTouchSteering(e);
-                    
-                    for (let i = 0; i < e.changedTouches.length; i++) {
-                        const touch = e.changedTouches[i];
-                        const now = performance.now();
-                        if (touch.clientX < window.innerWidth / 2) {
-                            if (now - this.lastTap.l < 300) {
-                                this.ind.l = !this.ind.l; this.ind.r = false; this.updateUIIndicators();
-                                this.lastTap.l = 0;
-                            } else {
-                                this.lastTap.l = now;
-                            }
-                        } else {
-                            if (now - this.lastTap.r < 300) {
-                                this.ind.r = !this.ind.r; this.ind.l = false; this.updateUIIndicators();
-                                this.lastTap.r = 0;
-                            } else {
-                                this.lastTap.r = now;
-                            }
-                        }
-                    }
-                }, { passive: true });
-
-                window.addEventListener('touchmove', e => { updateTouchSteering(e); }, { passive: true });
-                window.addEventListener('touchend', e => { updateTouchSteering(e); }, { passive: true });
-                window.addEventListener('touchcancel', e => { updateTouchSteering(e); }, { passive: true });
-
                 this.isPlaying = false; this.boundLoop = this.loop.bind(this);
             }
 
@@ -525,25 +472,21 @@
                 if (typeof AudioSys !== 'undefined') AudioSys.init();
                 this.vConf = VEHICLES[vIdx]; this.mapId = mapId;
                 this.isPlaying = true; this.score = 0; this.fuel = 100;
-                this.keys = {}; this.ind = { l:false, r:false };
                 this.p = { x: 300, y: 650, speed: 0, angle: 0, logY: 0, w: this.vConf.w, h: this.vConf.h };
                 this.p.lane = this.resolveLane(this.p.x);
                 this.em = []; this.spawnTimer = 0;
                 this.lights = { timer: 5000, state: 'green', block: 4000 };
                 this.env = []; this.envSpawnTimer = 0;
                 this.lastTime = performance.now();
-                this.strikes = 0; this.laneStrikes = 0; this.idleTime = 0; this.slowTime = 0;
-                this.stats = { indicatorMisses: 0, laneViolations: 0, signalViolations: 0, nearMisses: 0 };
-                this.lastLaneRewardT = 0;
+                this.strikes = 0; this.laneStrikes = 0; this.idleTime = 0;
+                this.missedPoints = 0; this.lastLaneRewardT = 0;
+                this.stats = { noSignalTurn: 0, suddenBrake: 0, unnecessaryStop: 0, nearMiss: 0 };
                 document.getElementById('strike-ui').innerText = '';
                 document.getElementById('lane-strike-ui').innerText = '';
                 this.updateUIIndicators();
-                
-                if (('ontouchstart' in window || navigator.maxTouchPoints > 0) && !this.mobileHintShown) {
-                    this.mobileHintShown = true;
-                    setTimeout(() => { this.msg("Double tap left/right for indicator"); }, 500);
-                }
-                
+                this.mapLoopIndex = 0; this.preSignShown = false; this.bannerActive = false;
+                if(document.getElementById('pre-entry-sign')) document.getElementById('pre-entry-sign').style.opacity = 0;
+                if(document.getElementById('entry-banner')) document.getElementById('entry-banner').style.opacity = 0;
                 requestAnimationFrame(this.boundLoop);
             }
 
@@ -637,9 +580,14 @@
             }
 
             addScore(pts, reason) {
+                if (reason === "SUDDEN BRAKE") this.stats.suddenBrake++;
+                else if (reason === "NO SIGNAL TURN") this.stats.noSignalTurn++;
+                else if (reason === "UNNECESSARY STOP") this.stats.unnecessaryStop++;
+                else if (reason === "NEAR MISS") this.stats.nearMiss++;
+
                 this.score += pts;
                 if(pts > 0) { this.fuel = Math.min(100, this.fuel + 5); if(reason) this.msg(`+${pts} ${reason}`); }
-                else { if(reason) this.msg(`${pts} ${reason}`, true); }
+                else { if(reason) this.msg(`${pts} ${reason}`, true); this.missedPoints -= pts; }
             }
             
             checkIdling(dt, distToLight) {
@@ -659,7 +607,6 @@
                 const doc = document.getElementById('game-container');
                 doc.classList.add('flash-violation');
                 this.laneStrikes++;
-                this.stats.laneViolations++;
                 if (this.laneStrikes === 1) { this.addScore(-20, "LANE VIOLATION 1/3"); document.getElementById('lane-strike-ui').innerText = 'LANE VIOLATION: 1/3 WARNING';}
                 else if (this.laneStrikes === 2) { this.addScore(-50, "LANE VIOLATION 2/3"); document.getElementById('lane-strike-ui').innerText = 'LANE VIOLATION: 2/3 FINAL WARNING'; }
                 else if (this.laneStrikes >= 3) { return this.stop("EXCEEDED LANE VIOLATIONS"); }
@@ -668,76 +615,27 @@
             }
 
             update(dt) {
-                let p = this.p;
-                let pw = p.w*0.8, ph = p.h*0.8; let pr = { l: p.x - pw/2, r: p.x + pw/2, t: p.y - ph/2, b: p.y + ph/2 };
-                let crashReason = null;
-                let nearMissLog = [];
-
-                for(let e of this.em) {
-                    let sy = 650 - (e.logY - p.logY);
-                    
-                    let rw = e.t==='v'? (e.w*2)*0.8 : (e.t==='p'? e.w*2 : e.w*2.5)*0.8; 
-                    let rh = e.t==='v'? (e.h*2)*0.8 : (e.t==='p'? e.h*2 : e.h*2.5)*0.8;
-
-                    let er = { l: e.x - rw/2, r: e.x + rw/2, t: sy - rh/2, b: sy + rh/2 };
-                    let nm = { l: e.x - rw/2 - 25, r: e.x + rw/2 + 25, t: sy - rh/2 - 25, b: sy + rh/2 + 25 };
-                    
-                    if(!(nm.l > pr.r || nm.r < pr.l || nm.t > pr.b || nm.b < pr.t)) {
-                        if(!(er.l > pr.r || er.r < pr.l || er.t > pr.b || er.b < pr.t)) {
-                            if (e.t === 'hole' && !e.hit) {
-                                e.hit = true; p.speed *= 0.5; this.shakeTimer = 200; this.addScore(-10, "POTHOLE HIT");
-                            } else if (e.t === 'breaker' && !e.hit) {
-                                e.hit = true;
-                                if (p.speed > 8) { p.speed *= 0.3; this.shakeTimer = 300; this.addScore(-15, "TOOK BREAKER TOO FAST"); }
-                            } else if (e.t !== 'hole' && e.t !== 'breaker') {
-                                if(e.t === 'cow') { crashReason = "HIT A COW - INSTANT JAIL"; AudioSys.playCrash('animal'); }
-                                else if(e.t === 'buf') { crashReason = "HIT A BUFFALO - TOTALED"; AudioSys.playCrash('animal'); }
-                                else if(e.t === 'p') { crashReason = "HIT PEDESTRIAN"; AudioSys.playCrash('pedestrian'); }
-                                else { crashReason = "FATAL TRAFFIC CRASH"; AudioSys.playCrash('vehicle'); }
-                                break;
-                            }
-                        } else {
-                            if (p.speed > 5 && !e.nearMissed && sy >= 640 && (e.t === 'v' || e.t === 'p' || e.t === 'buf' || e.t === 'cow')) {
-                                nearMissLog.push(e);
-                            }
-                        }
-                    }
+                let segmentDist = this.p.logY % 20000; let currentLoop = Math.floor(this.p.logY / 20000);
+                let nextMapIdx = (MAPS.findIndex(m => m.id === this.mapId) + 1) % MAPS.length; let nextMap = MAPS[nextMapIdx];
+                const preSign = document.getElementById('pre-entry-sign'); const banner = document.getElementById('entry-banner');
+                if (preSign && banner) {
+                    if (segmentDist > 18000) { if (!this.preSignShown) { preSign.innerText = "1 KM TO " + nextMap.name; preSign.style.opacity = 1; this.preSignShown = true; } }
+                    else if (this.preSignShown) { preSign.style.opacity = 0; this.preSignShown = false; }
+                    if (currentLoop > this.mapLoopIndex) { this.mapLoopIndex = currentLoop; this.mapId = nextMap.id; banner.innerText = "WELCOME TO " + MAPS.find(m => m.id === this.mapId).name; banner.style.opacity = 1; this.bannerActive = true; }
+                    if (this.bannerActive && segmentDist > 1500) { banner.style.opacity = 0; this.bannerActive = false; }
                 }
-
-                if (crashReason) {
-                    this.keys.ArrowUp = false;
-                    this.keys.ArrowLeft = false;
-                    this.keys.ArrowRight = false;
-                    return this.stop(crashReason);
-                } else {
-                    for (let e of nearMissLog) {
-                        e.nearMissed = true;
-                        if(this.stats.nearMiss !== undefined) this.stats.nearMiss++; else if(this.stats.nearMisses !== undefined) this.stats.nearMisses++;
-                        this.addScore(5, null); 
-
-                        let now = performance.now();
-                        if (!this.lastCC || now - this.lastCC > 1000) {
-                            this.lastCC = now;
-                            this.shakeTimer = 200;
-                            this.slowMoTimer = 200;
-                            const tArr = ["Close Call 🔥", "Saved It 😮‍💨", "That Was Tight 😬"];
-                            this.showCCText(tArr[Math.floor(Math.random()*tArr.length)]);
-                        }
-                    }
-                }
-
                 this.fuel -= (dt/1000) * 1.5; if(this.fuel <= 0) return this.stop("OUT OF FUEL");
 
-                let brake = this.keys.ArrowDown; let accel = this.keys.ArrowUp;
-                
-                let speedToCheck = accel ? p.speed + this.vConf.a : (brake ? p.speed - 0.6 : p.speed - 0.05);
-
+                let p = this.p;
                 if (p.speed > 0.5) {
                     if (typeof AudioSys !== 'undefined') AudioSys.playEngine(this.vConf.eSound || 'generic');
                 } else {
                     if (typeof AudioSys !== 'undefined') AudioSys.stopEngine();
                 }
 
+                if (p.speed > 3) this.addScore(p.speed * (dt/1000) * 0.4, null);
+                let brake = this.keys.ArrowDown; let accel = this.keys.ArrowUp;
+                
                 if(accel) p.speed += this.vConf.a;
                 else if(brake) p.speed -= 0.6; else p.speed -= 0.05;
                 if(p.speed < 0) p.speed = 0; if(p.speed > this.vConf.s) p.speed = this.vConf.s;
@@ -770,21 +668,13 @@
                                         if (risk) { this.addScore(10, "SAFE LANE CHG"); this.lastLaneRewardT = now; }
                                     }
                                 }
-                                else { this.addScore(-5, "NO SIGNAL TURN"); this.stats.indicatorMisses++; }
+                                else this.addScore(-5, "NO SIGNAL TURN");
                             }
                         }
                     }
                 }
                 if (st === 0) this.sf = false;
                 if(p.x < 150) p.x=150; if(p.x > 450) p.x=450;
-                
-                if (p.speed > this.vConf.s * 0.8) {
-                    this.score += 2 * (dt/1000); // passive trickle for efficient speed
-                }
-                if (p.speed < 2 && p.speed > 0) {
-                    this.slowTime += dt;
-                    if (this.slowTime > 2500) { this.addScore(-1, "DRIVING TOO SLOW"); this.slowTime = 0; }
-                } else { this.slowTime = 0; }
 
                 this.lights.timer -= dt;
                 if(this.lights.timer <= 0) {
@@ -807,7 +697,6 @@
                 if (distToLight < 20 && p.speed > 2 && this.lights.state === 'red') { 
                     if(!this.rp) {
                         this.strikes++;
-                        this.stats.signalViolations++;
                         if (this.strikes === 1) { this.addScore(-20, "SIGNAL VIOLATION 1/3"); document.getElementById('strike-ui').innerText = 'VIOLATION: 1/3 WARNING';}
                         else if (this.strikes === 2) { this.addScore(-50, "SIGNAL VIOLATION 2/3"); document.getElementById('strike-ui').innerText = 'VIOLATION: 2/3 FINAL WARNING'; }
                         else if (this.strikes >= 3) { return this.stop("EXCEEDED SIGNAL VIOLATIONS"); }
@@ -873,7 +762,57 @@
                     if(e.logY < p.logY - 200 || e.x < -100 || e.x > 700) this.em.splice(i,1);
                 }
 
+                let pw = p.w*0.8, ph = p.h*0.8; let pr = { l: p.x - pw/2, r: p.x + pw/2, t: p.y - ph/2, b: p.y + ph/2 };
+                let npr = { l: pr.l - 25, r: pr.r + 25, t: pr.t - 30, b: pr.b + 30 };
+                let crashReason = null;
+                let nearMisses = [];
 
+                for(let e of this.em) {
+                    let sy = 650 - (e.logY - p.logY);
+                    
+                    // Box scaling math adjustments to account for V8 intrinsic draw bumps 
+                    let rw = e.t==='v'? (e.w*2)*0.8 : (e.t==='p'? e.w*2 : e.w*2.5)*0.8; 
+                    let rh = e.t==='v'? (e.h*2)*0.8 : (e.t==='p'? e.h*2 : e.h*2.5)*0.8;
+
+                    let er = { l: e.x - rw/2, r: e.x + rw/2, t: sy - rh/2, b: sy + rh/2 };
+                    if(!(er.l > pr.r || er.r < pr.l || er.t > pr.b || er.b < pr.t)) {
+                        if (e.t === 'hole' && !e.hit) {
+                            e.hit = true; p.speed *= 0.5; this.shakeTimer = 200; this.addScore(-10, "POTHOLE HIT");
+                        } else if (e.t === 'breaker' && !e.hit) {
+                            e.hit = true;
+                            if (p.speed > 8) { p.speed *= 0.3; this.shakeTimer = 300; this.addScore(-15, "TOOK BREAKER TOO FAST"); }
+                        } else if (e.t !== 'hole' && e.t !== 'breaker') {
+                            if(e.t === 'cow') { crashReason = "HIT A COW - INSTANT JAIL"; AudioSys.playCrash('animal'); }
+                            else if(e.t === 'buf') { crashReason = "HIT A BUFFALO - TOTALED"; AudioSys.playCrash('animal'); }
+                            else if(e.t === 'p') { crashReason = "HIT PEDESTRIAN"; AudioSys.playCrash('pedestrian'); }
+                            else { crashReason = "FATAL TRAFFIC CRASH"; AudioSys.playCrash('vehicle'); }
+                            break;
+                        }
+                    } else if (!(er.l > npr.r || er.r < npr.l || er.t > npr.b || er.b < npr.t)) {
+                        if (!e.nmAwarded && p.speed > 5 && (e.t === 'v' || e.t === 'p' || e.t === 'buf' || e.t === 'cow')) {
+                            nearMisses.push(e);
+                        }
+                    }
+                }
+
+                if (crashReason) {
+                    return this.stop(crashReason);
+                } else {
+                    for (let e of nearMisses) {
+                        e.nmAwarded = true;
+                        if(this.stats.nearMiss !== undefined) this.stats.nearMiss++; else this.stats.nearMiss = 1;
+                        this.addScore(5, null); 
+
+                        let now = performance.now();
+                        if (!this.lastCC || now - this.lastCC > 1000) {
+                            this.lastCC = now;
+                            this.shakeTimer = 200;
+                            this.slowMoTimer = 200;
+                            const tArr = ["Close Call 🔥", "Saved It 😮‍💨", "That Was Tight 😬"];
+                            this.showCCText(tArr[Math.floor(Math.random()*tArr.length)]);
+                        }
+                    }
+                }
 
                 document.getElementById('score').innerText = Math.floor(this.score); document.getElementById('speed').innerText = Math.floor(p.speed*10);
                 document.getElementById('dist').innerText = Math.floor(p.logY); document.getElementById('fuel-bar').style.width = this.fuel + '%';
@@ -953,6 +892,7 @@
             }
 
             loop(t) {
+                if(!this.isPlaying) return;
                 let dt = t - this.lastTime; this.lastTime = t; if(dt>100)dt=16;
 
                 if (this.shakeTimer > 0) {
@@ -967,27 +907,29 @@
                     dt *= 0.3;
                 }
 
-                if(this.isPlaying) this.update(dt);
-                this.draw();
-                requestAnimationFrame(this.boundLoop);
+                this.update(dt); this.draw(); requestAnimationFrame(this.boundLoop);
             }
         }
 
         let currV = 0;
+        let currMapId = MAPS[0].id;
         document.addEventListener('DOMContentLoaded', () => {
             const g = new GameEngine();
             const gui = { garage: document.getElementById('garage-screen'), ov: document.getElementById('game-over-screen') };
 
             function rUI() {
                 document.getElementById('global-score-ui').innerText = GLOBAL_SCORE;
+                let nextCost = 999999;
                 const vl = document.getElementById('vehicle-list'); vl.innerHTML='';
                 VEHICLES.forEach((v,i) => {
                     const b = document.createElement('button');
                     let u = UNLOCKED_VEHICLES.includes(v.id) || v.cost === 0;
+                    if(!u && v.cost < nextCost) nextCost = v.cost;
                     b.innerText = u ? `SELECT ${v.name}` : `BUY ${v.name}\n${v.cost}PTS`;
                     if(!u && GLOBAL_SCORE >= v.cost) {
-                        b.onclick = () => { GLOBAL_SCORE-=v.cost; UNLOCKED_VEHICLES.push(v.id); saveProgress(); rUI(); };
+                        b.onclick = () => { if(HAS_UNLOCKED_THIS_SESSION) return; GLOBAL_SCORE-=v.cost; UNLOCKED_VEHICLES.push(v.id); HAS_UNLOCKED_THIS_SESSION=true; saveProgress(); rUI(); };
                         b.style.borderColor='#ffaa00'; b.style.color='#ffaa00';
+                        if(HAS_UNLOCKED_THIS_SESSION) b.disabled = true;
                     } else if (!u) { b.disabled = true; }
                     else { b.onclick = () => { currV = i; sel(i); }; }
                     vl.appendChild(b);
@@ -997,22 +939,24 @@
                 MAPS.forEach((m,i) => {
                     const mb = document.createElement('button');
                     let mu = MAP_UNLOCKS >= m.levelReq;
+                    if(!mu && m.unlockCost < nextCost) nextCost = m.unlockCost;
                     mb.innerText = mu ? `PLAY ${m.name}` : `UNLOCK ${m.name}\n${m.unlockCost}PTS`;
                     if(!mu && GLOBAL_SCORE >= m.unlockCost) {
-                        mb.onclick = () => { GLOBAL_SCORE-=m.unlockCost; MAP_UNLOCKS=m.levelReq; saveProgress(); rUI(); };
+                        mb.onclick = () => { if(HAS_UNLOCKED_THIS_SESSION) return; GLOBAL_SCORE-=m.unlockCost; MAP_UNLOCKS=m.levelReq; HAS_UNLOCKED_THIS_SESSION=true; saveProgress(); rUI(); };
                         mb.style.borderColor='#ffaa00'; mb.style.color='#ffaa00';
+                        if(HAS_UNLOCKED_THIS_SESSION) mb.disabled = true;
                     } else if (!mu) { mb.disabled = true; }
-                    else { mb.onclick = () => { document.getElementById('hud-screen').classList.remove('hidden'); gui.garage.classList.add('hidden'); g.startGame(currV, m.id); }; }
+                    else { mb.onclick = () => { currMapId = m.id; document.getElementById('hud-screen').classList.remove('hidden'); gui.garage.classList.add('hidden'); g.startGame(currV, currMapId); }; }
                     ml.appendChild(mb);
                 });
-                let nextCost = Infinity; let nextItem = '';
-                VEHICLES.forEach(v => { if(!UNLOCKED_VEHICLES.includes(v.id) && v.cost > GLOBAL_SCORE && v.cost < nextCost) { nextCost=v.cost; nextItem=v.name; } });
-                MAPS.forEach(m => { if(MAP_UNLOCKS < m.levelReq && m.unlockCost > GLOBAL_SCORE && m.unlockCost < nextCost) { nextCost=m.unlockCost; nextItem=m.name; } });
                 
-                const feed = document.getElementById('garage-progression-feedback');
-                if(nextCost !== Infinity) feed.innerHTML = `Next unlock: <b>${nextItem}</b> in <span style="color:#00ffff">${nextCost - GLOBAL_SCORE} PTS</span><br><br>Keep playing and drive safely to earn points!`;
-                else feed.innerHTML = `<span style="color:#00ff66">All regular items unlocked!</span>`;
-                
+                const nextUI = document.getElementById('next-unlock-info');
+                let ptsReq = nextCost - GLOBAL_SCORE;
+                if(nextCost === 999999) nextUI.innerText = "ALL UNLOCKED!";
+                else if(ptsReq > 0) nextUI.innerText = `NEXT UNLOCK IN ${ptsReq} PTS`;
+                else if(HAS_UNLOCKED_THIS_SESSION) nextUI.innerText = `ONLY 1 UNLOCK PER RUN! PLAY AGAIN!`;
+                else nextUI.innerText = `UNLOCK AVAILABLE!`;
+
                 sel(currV);
             }
 
@@ -1025,11 +969,8 @@
                 xc.drawImage(v.sp, 100 - (v.w*3), 75 - (v.h*3), v.w*6, v.h*6);
             }
 
-            document.getElementById('btn-restart-retry').onclick = () => { gui.ov.classList.add('hidden'); document.getElementById('hud-screen').classList.remove('hidden'); g.startGame(currV, g.mapId); };
-            document.getElementById('btn-restart-menu').onclick = () => { gui.ov.classList.add('hidden'); gui.garage.classList.remove('hidden'); rUI(); };
-            document.getElementById('btn-next-retry').onclick = () => { gui.ov.classList.add('hidden'); document.getElementById('level-complete-screen').classList.add('hidden'); document.getElementById('hud-screen').classList.remove('hidden'); g.startGame(currV, g.mapId); };
-            document.getElementById('btn-next-menu').onclick = () => { gui.ov.classList.add('hidden'); document.getElementById('level-complete-screen').classList.add('hidden'); gui.garage.classList.remove('hidden'); rUI(); };
-            
+            document.getElementById('btn-restart').onclick = () => { gui.ov.classList.add('hidden'); gui.garage.classList.remove('hidden'); rUI(); };
+            document.getElementById('btn-try-again').onclick = () => { gui.ov.classList.add('hidden'); document.getElementById('hud-screen').classList.remove('hidden'); g.startGame(currV, currMapId); };
             rUI();
         });
     </script>
