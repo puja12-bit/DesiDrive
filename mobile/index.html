@@ -219,6 +219,55 @@
             return c;
         }
 
+        const AudioSys = {
+            ctx: null,
+            ambNode: null,
+            init() {
+                if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                if (this.ctx.state === 'suspended') this.ctx.resume();
+            },
+            stopAmbulance() {
+                if(this.ambNode) { try { this.ambNode.stop(); } catch(e){} this.ambNode = null; }
+            },
+            playCrash(type) {
+                this.init(); this.stopAmbulance();
+                let t = this.ctx.currentTime;
+                if (type === 'vehicle') {
+                    let bufferSize = this.ctx.sampleRate * 0.4;
+                    let buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                    let data = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                    let noise = this.ctx.createBufferSource(); noise.buffer = buffer;
+                    let vF = this.ctx.createBiquadFilter(); vF.type = 'lowpass'; vF.frequency.value = 1000;
+                    let gn = this.ctx.createGain(); gn.gain.setValueAtTime(0.5, t); gn.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+                    noise.connect(vF); vF.connect(gn); gn.connect(this.ctx.destination);
+                    noise.start(t);
+                } else if (type === 'animal') {
+                    let o = this.ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(100, t); o.frequency.exponentialRampToValueAtTime(30, t + 0.2);
+                    let g = this.ctx.createGain(); g.gain.setValueAtTime(0.6, t); g.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+                    o.connect(g); g.connect(this.ctx.destination); o.start(t); o.stop(t+0.2);
+                    let o2 = this.ctx.createOscillator(); o2.type = 'triangle'; o2.frequency.setValueAtTime(150, t+0.05); o2.frequency.linearRampToValueAtTime(100, t+0.3);
+                    let g2 = this.ctx.createGain(); g2.gain.setValueAtTime(0, t); g2.gain.setValueAtTime(0.3, t+0.05); g2.gain.exponentialRampToValueAtTime(0.01, t+0.3);
+                    o2.connect(g2); g2.connect(this.ctx.destination); o2.start(t+0.05); o2.stop(t+0.3);
+                } else if (type === 'pedestrian') {
+                    let o = this.ctx.createOscillator(); o.type = 'sawtooth'; let vF = this.ctx.createBiquadFilter(); vF.type = 'lowpass'; vF.frequency.value = 800;
+                    o.frequency.setValueAtTime(300, t); o.frequency.linearRampToValueAtTime(200, t + 0.15);
+                    let g = this.ctx.createGain(); g.gain.setValueAtTime(0.3, t); g.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+                    o.connect(vF); vF.connect(g); g.connect(this.ctx.destination); o.start(t); o.stop(t+0.15);
+                }
+                setTimeout(() => this.playAmbulance(), 300);
+            },
+            playAmbulance() {
+                if(!this.ctx) return;
+                let t = this.ctx.currentTime; let o = this.ctx.createOscillator(); o.type = 'square';
+                let g = this.ctx.createGain(); g.gain.setValueAtTime(0.05, t); g.gain.linearRampToValueAtTime(0.0, t + 3);
+                for(let i=0; i<6; i++) { o.frequency.setValueAtTime(800, t + i*0.5); o.frequency.setValueAtTime(960, t + (i*0.5)+0.25); }
+                let vF = this.ctx.createBiquadFilter(); vF.type='lowpass'; vF.frequency.value = 1500;
+                o.connect(vF); vF.connect(g); g.connect(this.ctx.destination);
+                o.start(t); o.stop(t+3); this.ambNode = o;
+            }
+        };
+
         const PALS = {
             human: {1:'#fff', 2:'#ff0055', 3:'#00ffff', 4:'#222'},
             hazard: {1:'#ffaa00', 2:'#fff', 3:'#111'},
@@ -415,6 +464,7 @@
             resolveLane(x) { if (x < 233) return 0; if (x < 366) return 1; return 2; }
 
             startGame(vIdx, mapId) {
+                if (typeof AudioSys !== 'undefined') AudioSys.init();
                 this.vConf = VEHICLES[vIdx]; this.mapId = mapId;
                 this.isPlaying = true; this.score = 0; this.fuel = 100;
                 this.keys = {}; this.ind = { l:false, r:false };
@@ -426,6 +476,7 @@
                 this.lastTime = performance.now();
                 this.strikes = 0; this.laneStrikes = 0; this.idleTime = 0; this.slowTime = 0;
                 this.stats = { indicatorMisses: 0, laneViolations: 0, signalViolations: 0, nearMisses: 0 };
+                this.lastLaneRewardT = 0;
                 document.getElementById('strike-ui').innerText = '';
                 document.getElementById('lane-strike-ui').innerText = '';
                 this.updateUIIndicators();
@@ -497,7 +548,7 @@
                         feeds.push(`<span style="color:#ffaa00">Improve your driving next run!</span>`);
                     } else {
                         feeds.push(`<span style="color:#00ff66">Rule follow kiya</span> 🛡️`);
-                        if (this.stats.nearMiss > 0) feeds.push(`Close call! 🔥 <span style="color:#ffaa00">Near misses: ${this.stats.nearMiss}</span>`);
+                        if (this.stats.nearMiss > 0) feeds.push(`<span style="color:#ffaa00">Close calls: ${this.stats.nearMiss} 🔥</span>`);
                         else feeds.push(`<span style="color:#00ff66">Good control</span> 👍`);
                     }
                     feedsHtml = feeds.map(f => `<p style="color:#cccccc; text-shadow:0 0 5px #000; font-size:0.8rem; line-height:1.8; margin-bottom:15px; font-family:inherit; text-align:left;">• ${f}</p>`).join('');
@@ -517,10 +568,19 @@
                 el.appendChild(d); setTimeout(() => { if(el.contains(d)) el.removeChild(d); }, 2000);
             }
 
+            showCCText(t) {
+                const el = document.getElementById('messages-area');
+                const d = document.createElement('div'); d.className = 'floating-message'; 
+                d.style.color = '#ffaa00'; d.style.animation = 'floatUp 0.8s forwards'; 
+                d.style.fontSize = '1.2rem'; d.style.fontWeight = 'bold'; d.style.textShadow = '0 0 10px #ffaa00';
+                d.innerText = t;
+                el.appendChild(d); setTimeout(() => { if(el.contains(d)) el.removeChild(d); }, 800);
+            }
+
             addScore(pts, reason) {
                 this.score += pts;
-                if(pts > 0) { this.fuel = Math.min(100, this.fuel + 5); this.msg(`+${pts} ${reason}`); }
-                else { this.msg(`${pts} ${reason}`, true); }
+                if(pts > 0) { this.fuel = Math.min(100, this.fuel + 5); if(reason) this.msg(`+${pts} ${reason}`); }
+                else { if(reason) this.msg(`${pts} ${reason}`, true); }
             }
             
             checkIdling(dt, distToLight) {
@@ -565,10 +625,10 @@
                     
                     if(!(nm.l > pr.r || nm.r < pr.l || nm.t > pr.b || nm.b < pr.t)) {
                         if(!(er.l > pr.r || er.r < pr.l || er.t > pr.b || er.b < pr.t)) {
-                            if(e.t === 'cow') crashReason = "HIT A COW - INSTANT JAIL";
-                            else if(e.t === 'buf') crashReason = "HIT A BUFFALO - TOTALED";
-                            else if(e.t === 'p') crashReason = "HIT PEDESTRIAN";
-                            else crashReason = "FATAL TRAFFIC CRASH";
+                            if(e.t === 'cow') { crashReason = "HIT A COW - INSTANT JAIL"; AudioSys.playCrash('animal'); }
+                            else if(e.t === 'buf') { crashReason = "HIT A BUFFALO - TOTALED"; AudioSys.playCrash('animal'); }
+                            else if(e.t === 'p') { crashReason = "HIT PEDESTRIAN"; AudioSys.playCrash('pedestrian'); }
+                            else { crashReason = "FATAL TRAFFIC CRASH"; AudioSys.playCrash('vehicle'); }
                             break;
                         } else {
                             if (p.speed > 5 && !e.nearMissed && sy >= 640 && (e.t === 'v' || e.t === 'p' || e.t === 'buf' || e.t === 'cow')) {
@@ -587,7 +647,16 @@
                     for (let e of nearMissLog) {
                         e.nearMissed = true;
                         if(this.stats.nearMiss !== undefined) this.stats.nearMiss++; else if(this.stats.nearMisses !== undefined) this.stats.nearMisses++;
-                        this.addScore(20, "NEAR MISS");
+                        this.addScore(5, null); 
+
+                        let now = performance.now();
+                        if (!this.lastCC || now - this.lastCC > 1000) {
+                            this.lastCC = now;
+                            this.shakeTimer = 200;
+                            this.slowMoTimer = 200;
+                            const tArr = ["Close Call 🔥", "Saved It 😮‍💨", "That Was Tight 😬"];
+                            this.showCCText(tArr[Math.floor(Math.random()*tArr.length)]);
+                        }
                     }
                 }
 
@@ -617,7 +686,16 @@
                         } else {
                             if (st !== 0 && !this.sf) {
                                 this.sf = true;
-                                if((st===-1 && this.ind.l) || (st===1 && this.ind.r)) this.addScore(10, "SAFE LANE CHG");
+                                if((st===-1 && this.ind.l) || (st===1 && this.ind.r)) {
+                                    let now = performance.now();
+                                    if (now - this.lastLaneRewardT > 500) {
+                                        let risk = false;
+                                        for (let e of this.em) {
+                                            if (Math.abs(e.logY - p.logY) < 300 && Math.abs(e.x - p.x) < 150) { risk = true; break; }
+                                        }
+                                        if (risk) { this.addScore(10, "SAFE LANE CHG"); this.lastLaneRewardT = now; }
+                                    }
+                                }
                                 else { this.addScore(-5, "NO SIGNAL TURN"); this.stats.indicatorMisses++; }
                             }
                         }
@@ -788,6 +866,19 @@
 
             loop(t) {
                 let dt = t - this.lastTime; this.lastTime = t; if(dt>100)dt=16;
+
+                if (this.shakeTimer > 0) {
+                    this.shakeTimer -= dt;
+                    this.c.style.transform = `translate(${Math.random()*4-2}px, ${Math.random()*4-2}px)`;
+                } else if (this.c.style.transform !== 'translate(0px, 0px)' && this.c.style.transform !== '') {
+                    this.c.style.transform = 'translate(0px, 0px)';
+                }
+
+                if (this.slowMoTimer > 0) {
+                    this.slowMoTimer -= dt;
+                    dt *= 0.3;
+                }
+
                 if(this.isPlaying) this.update(dt);
                 this.draw();
                 requestAnimationFrame(this.boundLoop);
