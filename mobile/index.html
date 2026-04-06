@@ -390,6 +390,8 @@
         let dTree = new Array(400).fill(0); for(let y=0;y<20;y++) for(let x=0;x<20;x++){ let ds=Math.sqrt((x-10)**2+(y-10)**2); if(ds<3)dTree[y*20+x]=4;else if(ds<7)dTree[y*20+x]=(Math.random()>0.5?1:2);else if(ds<9&&Math.random()>0.3)dTree[y*20+x]=(Math.random()>0.5?2:3); }
         let dShop = new Array(450).fill(0); for(let y=0;y<15;y++) for(let x=0;x<30;x++){ if(y<5)dShop[y*30+x]=1;else if(y>5&&x>10&&x<20)dShop[y*30+x]=3;else if(y>8&&(x<8||x>22))dShop[y*30+x]=4;else dShop[y*30+x]=2; }
         let dHouse = new Array(600).fill(0); for(let y=0;y<20;y++) for(let x=0;x<30;x++){ if(y<8){if(x>y&&x<30-y)dHouse[y*30+x]=1;}else{if(y>12&&x>12&&x<18)dHouse[y*30+x]=4;else if(y>10&&y<15&&(x===5||x===25))dHouse[y*30+x]=3;else dHouse[y*30+x]=2;} }
+        let dHole = new Array(400).fill(0); for(let y=0;y<20;y++) for(let x=0;x<20;x++){ let ds=Math.sqrt((x-10)**2+(y-10)**2); if(ds<6)dHole[y*20+x]=(Math.random()>0.4?1:2); }
+        let dBreak = new Array(600).fill(0); for(let y=0;y<10;y++) for(let x=0;x<60;x++){ if(y>2&&y<8)dBreak[y*60+x]=((Math.floor(x/10))%2===0?1:2); else dBreak[y*60+x]=3; }
 
         function createBoxySprite(w,h,cb,cw,ct) {
             let data = new Array(w*h).fill(0);
@@ -412,7 +414,9 @@
             auto: gen(12,14, dAuto, PALS.auto),
             bwm: createBoxySprite(20, 36, '#ffffff', '#111', '#222'),
             bwmWhite: createBoxySprite(24, 40, '#ffffff', '#e0e0e0', '#222'),
-            bus: createBoxySprite(30, 60, '#00ff66', '#222', '#111')
+            bus: createBoxySprite(30, 60, '#00ff66', '#222', '#111'),
+            hole: gen(20, 20, dHole, {1:'#111', 2:'#0a0a0a'}),
+            breaker: gen(60, 10, dBreak, {1:'#ffaa00', 2:'#111', 3:'#222'})
         };
 
         let GLOBAL_SCORE = localStorage.getItem('v8_score') ? parseInt(localStorage.getItem('v8_score')) : 0;
@@ -432,7 +436,8 @@
 
         const MAPS = [
             { id: 'hyderabad', name: 'HYDERABAD BLOCKS', unlockCost: 0, levelReq: 0 },
-            { id: 'highway', name: 'NATIONAL HIGHWAY', unlockCost: 5000, levelReq: 1 }
+            { id: 'highway', name: 'NATIONAL HIGHWAY', unlockCost: 5000, levelReq: 1 },
+            { id: 'offroad', name: 'MP OFF-ROAD', unlockCost: 0, levelReq: 0 }
         ];
 
         function saveProgress() {
@@ -679,11 +684,18 @@
                     
                     if(!(nm.l > pr.r || nm.r < pr.l || nm.t > pr.b || nm.b < pr.t)) {
                         if(!(er.l > pr.r || er.r < pr.l || er.t > pr.b || er.b < pr.t)) {
-                            if(e.t === 'cow') { crashReason = "HIT A COW - INSTANT JAIL"; AudioSys.playCrash('animal'); }
-                            else if(e.t === 'buf') { crashReason = "HIT A BUFFALO - TOTALED"; AudioSys.playCrash('animal'); }
-                            else if(e.t === 'p') { crashReason = "HIT PEDESTRIAN"; AudioSys.playCrash('pedestrian'); }
-                            else { crashReason = "FATAL TRAFFIC CRASH"; AudioSys.playCrash('vehicle'); }
-                            break;
+                            if (e.t === 'hole' && !e.hit) {
+                                e.hit = true; p.speed *= 0.5; this.shakeTimer = 200; this.addScore(-10, "POTHOLE HIT");
+                            } else if (e.t === 'breaker' && !e.hit) {
+                                e.hit = true;
+                                if (p.speed > 8) { p.speed *= 0.3; this.shakeTimer = 300; this.addScore(-15, "TOOK BREAKER TOO FAST"); }
+                            } else if (e.t !== 'hole' && e.t !== 'breaker') {
+                                if(e.t === 'cow') { crashReason = "HIT A COW - INSTANT JAIL"; AudioSys.playCrash('animal'); }
+                                else if(e.t === 'buf') { crashReason = "HIT A BUFFALO - TOTALED"; AudioSys.playCrash('animal'); }
+                                else if(e.t === 'p') { crashReason = "HIT PEDESTRIAN"; AudioSys.playCrash('pedestrian'); }
+                                else { crashReason = "FATAL TRAFFIC CRASH"; AudioSys.playCrash('vehicle'); }
+                                break;
+                            }
                         } else {
                             if (p.speed > 5 && !e.nearMissed && sy >= 640 && (e.t === 'v' || e.t === 'p' || e.t === 'buf' || e.t === 'cow')) {
                                 nearMissLog.push(e);
@@ -822,17 +834,25 @@
                     this.spawnTimer = 0; let r = Math.random();
                     let e = { logY: p.logY + 700 + Math.random()*200, x: 150 + Math.random()*250, waitT: 0, maxWait: Math.random()*3000 };
                     
-                    if(r < 0.7) { 
-                        e.t = 'v'; e.s = 3 + Math.random()*6; let vR = Math.random();
-                        if(vR<0.2) { e.w=10; e.h=16; e.sp=SPRITES.bike; } else if(vR<0.4) { e.w=12; e.h=14; e.sp=SPRITES.auto; }
-                        else if(vR<0.7) { e.w=20; e.h=36; e.sp=SPRITES.bwm; } else { e.w=30; e.h=60; e.sp=SPRITES.bus; e.s=2; }
-                    } else if (r < 0.85) { // V8 Human Implementation
-                        e.t = 'p'; e.sp1 = SPRITES.hum1; e.sp2 = SPRITES.hum2; e.w=8; e.h=8; e.sx = (Math.random()>0.5?1:-1) * 2; e.x = e.sx>0?100:500;
-                        e.animT = 0; // custom animation timer logic per human
-                    } else if (r < 0.95) { // V8 Flat Cow
-                        e.t = 'cow'; e.sp = SPRITES.cow; e.w=12; e.h=12; e.sx = (Math.random()>0.5?1:-1) * 0.2; e.x = e.sx>0?150:450;
-                    } else { // V8 Flat Buffalo
-                        e.t = 'buf'; e.sp = SPRITES.buffalo; e.w=16; e.h=16; e.sx = (Math.random()>0.5?1:-1) * 0.1; e.x = e.sx>0?150:450; e.maxWait = 6000;
+                    if (this.mapId === 'offroad' && r > 0.85) {
+                        if (Math.random() > 0.5) {
+                            e.t = 'hole'; e.sp = SPRITES.hole; e.w = 20; e.h = 20; e.s = 0; e.sx = 0;
+                        } else {
+                            e.t = 'breaker'; e.sp = SPRITES.breaker; e.w = 60; e.h = 10; e.s = 0; e.sx = 0; e.x = 200 + Math.floor(Math.random()*3)*100;
+                        }
+                    } else {
+                        if(r < 0.7) { 
+                            e.t = 'v'; e.s = 3 + Math.random()*6; let vR = Math.random();
+                            if(vR<0.2) { e.w=10; e.h=16; e.sp=SPRITES.bike; } else if(vR<0.4) { e.w=12; e.h=14; e.sp=SPRITES.auto; }
+                            else if(vR<0.7) { e.w=20; e.h=36; e.sp=SPRITES.bwm; } else { e.w=30; e.h=60; e.sp=SPRITES.bus; e.s=2; }
+                        } else if (r < 0.85) { // V8 Human Implementation
+                            e.t = 'p'; e.sp1 = SPRITES.hum1; e.sp2 = SPRITES.hum2; e.w=8; e.h=8; e.sx = (Math.random()>0.5?1:-1) * 2; e.x = e.sx>0?100:500;
+                            e.animT = 0; // custom animation timer logic per human
+                        } else if (r < 0.95) { // V8 Flat Cow
+                            e.t = 'cow'; e.sp = SPRITES.cow; e.w=12; e.h=12; e.sx = (Math.random()>0.5?1:-1) * 0.2; e.x = e.sx>0?150:450;
+                        } else { // V8 Flat Buffalo
+                            e.t = 'buf'; e.sp = SPRITES.buffalo; e.w=16; e.h=16; e.sx = (Math.random()>0.5?1:-1) * 0.1; e.x = e.sx>0?150:450; e.maxWait = 6000;
+                        }
                     }
                     this.em.push(e);
                 }
