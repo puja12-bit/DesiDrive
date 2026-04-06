@@ -275,27 +275,28 @@
                 this.engineType = type;
                 let t = this.ctx.currentTime;
                 this.engineGain = this.ctx.createGain();
-                this.engineGain.gain.value = 0.05;
+                this.engineGain.gain.value = 0.15;
                 this.engineGain.connect(this.ctx.destination);
                 this.engineNode = this.ctx.createOscillator();
                 if (type === 'thump') {
-                    this.engineNode.type = 'sawtooth'; this.engineNode.frequency.value = 45;
-                    this.engineLFO = this.ctx.createOscillator(); this.engineLFO.type = 'square'; this.engineLFO.frequency.value = 8;
-                    let lfoGain = this.ctx.createGain(); lfoGain.gain.value = 25;
+                    this.engineNode.type = 'sawtooth'; this.engineNode.frequency.value = 75;
+                    this.engineLFO = this.ctx.createOscillator(); this.engineLFO.type = 'square'; this.engineLFO.frequency.value = 10;
+                    let lfoGain = this.ctx.createGain(); lfoGain.gain.value = 35;
                     this.engineLFO.connect(lfoGain); lfoGain.connect(this.engineNode.frequency);
                     this.engineLFO.start(t);
-                    let filter = this.ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 400;
+                    let filter = this.ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 1000;
                     this.engineNode.connect(filter); filter.connect(this.engineGain);
                 } else if (type === 'fast') {
-                    this.engineNode.type = 'sawtooth'; this.engineNode.frequency.value = 160;
-                    let filter = this.ctx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 1200;
+                    this.engineNode.type = 'sawtooth'; this.engineNode.frequency.value = 240;
+                    let filter = this.ctx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 1500;
                     this.engineNode.connect(filter); filter.connect(this.engineGain);
                 } else if (type === 'smooth') {
-                    this.engineNode.type = 'triangle'; this.engineNode.frequency.value = 90;
-                    this.engineNode.connect(this.engineGain);
-                } else {
-                    this.engineNode.type = 'sawtooth'; this.engineNode.frequency.value = 80;
+                    this.engineNode.type = 'square'; this.engineNode.frequency.value = 120;
                     let filter = this.ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 600;
+                    this.engineNode.connect(filter); filter.connect(this.engineGain);
+                } else {
+                    this.engineNode.type = 'sawtooth'; this.engineNode.frequency.value = 120;
+                    let filter = this.ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 900;
                     this.engineNode.connect(filter); filter.connect(this.engineGain);
                 }
                 this.engineNode.start(t);
