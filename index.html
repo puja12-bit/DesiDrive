@@ -183,6 +183,8 @@
                     </div>
                 </div>
                 <div id="messages-area"></div>
+                <div id="pre-entry-sign" class="floating-sign" style="opacity: 0; position: absolute; top: 120px; right: 20px; font-size: 1.2rem; color: #ffaa00; text-shadow: 0 0 10px #ffaa00; transition: opacity 0.5s;">1 KM TO ROAD</div>
+                <div id="entry-banner" class="center-banner" style="opacity: 0; position: absolute; top: 40%; left: 0; width: 100%; text-align: center; font-size: 2.2rem; color: #00ff66; text-shadow: 0 0 20px #00ff66; font-weight: bold; background: rgba(0,0,0,0.7); padding: 20px 0; border-top: 2px solid #00ff66; border-bottom: 2px solid #00ff66; transition: opacity 0.3s; pointer-events: none;">WELCOME</div>
             </div>
 
             <div id="game-over-screen" class="screen hidden" style="justify-content:center;">
@@ -196,7 +198,7 @@
 
                 <div class="btn-group">
                     <button id="btn-restart" style="min-width: 140px;">GARAGE</button>
-                    <button id="btn-try-again" style="min-width: 140px; color: #ff0055; border-color: #ff0055; box-shadow: 0 0 15px rgba(255,0,85,0.4);">TRY AGAIN</button>
+                    <button id="btn-try-again" style="min-width: 140px; color: #ff0055; border-color: #ff0055; box-shadow: 0 0 15px rgba(255,0,85,0.4);">CONTINUE JOURNEY</button>
                 </div>
             </div>
             
@@ -476,13 +478,15 @@
                 this.lights = { timer: 5000, state: 'green', block: 4000 };
                 this.env = []; this.envSpawnTimer = 0;
                 this.lastTime = performance.now();
-                this.laneTraf = [0, 0, 0]; // Track logY of last spawn per lane
                 this.strikes = 0; this.laneStrikes = 0; this.idleTime = 0;
                 this.missedPoints = 0; this.lastLaneRewardT = 0;
                 this.stats = { noSignalTurn: 0, suddenBrake: 0, unnecessaryStop: 0, nearMiss: 0 };
                 document.getElementById('strike-ui').innerText = '';
                 document.getElementById('lane-strike-ui').innerText = '';
                 this.updateUIIndicators();
+                this.mapLoopIndex = 0; this.preSignShown = false; this.bannerActive = false;
+                if(document.getElementById('pre-entry-sign')) document.getElementById('pre-entry-sign').style.opacity = 0;
+                if(document.getElementById('entry-banner')) document.getElementById('entry-banner').style.opacity = 0;
                 requestAnimationFrame(this.boundLoop);
             }
 
@@ -611,6 +615,15 @@
             }
 
             update(dt) {
+                let segmentDist = this.p.logY % 20000; let currentLoop = Math.floor(this.p.logY / 20000);
+                let nextMapIdx = (MAPS.findIndex(m => m.id === this.mapId) + 1) % MAPS.length; let nextMap = MAPS[nextMapIdx];
+                const preSign = document.getElementById('pre-entry-sign'); const banner = document.getElementById('entry-banner');
+                if (preSign && banner) {
+                    if (segmentDist > 18000) { if (!this.preSignShown) { preSign.innerText = "1 KM TO " + nextMap.name; preSign.style.opacity = 1; this.preSignShown = true; } }
+                    else if (this.preSignShown) { preSign.style.opacity = 0; this.preSignShown = false; }
+                    if (currentLoop > this.mapLoopIndex) { this.mapLoopIndex = currentLoop; this.mapId = nextMap.id; banner.innerText = "WELCOME TO " + MAPS.find(m => m.id === this.mapId).name; banner.style.opacity = 1; this.bannerActive = true; }
+                    if (this.bannerActive && segmentDist > 1500) { banner.style.opacity = 0; this.bannerActive = false; }
+                }
                 this.fuel -= (dt/1000) * 1.5; if(this.fuel <= 0) return this.stop("OUT OF FUEL");
 
                 let p = this.p;
@@ -707,53 +720,26 @@
 
                 this.spawnTimer += dt;
                 if(this.spawnTimer > 400 && this.em.length < 30 && distToLight > 200) {
-                    let ld = [ p.logY - this.laneTraf[0], p.logY - this.laneTraf[1], p.logY - this.laneTraf[2] ];
-                    let maxLd = Math.max(...ld);
-                    let blockH = [];
-                    for (let n of this.em) {
-                        if (n.logY > p.logY + 400 && n.logY < p.logY + 900) {
-                            if (n.x < 233) blockH.push(0);
-                            else if (n.x < 366) blockH.push(1);
-                            else blockH.push(2);
-                        }
-                    }
-                    let tgt;
-                    if (maxLd > 1200) {
-                        tgt = ld.indexOf(maxLd);
-                        let otherLanes = [0,1,2].filter(l => l !== tgt);
-                        if (blockH.includes(otherLanes[0]) && blockH.includes(otherLanes[1])) return;
-                    } else {
-                        let w = Math.random() * (ld[0] + ld[1] + ld[2]);
-                        if (w < ld[0]) tgt = 0; else if (w < ld[0] + ld[1]) tgt = 1; else tgt = 2;
-                        let otherLanes = [0,1,2].filter(l => l !== tgt);
-                        if (blockH.includes(otherLanes[0]) && blockH.includes(otherLanes[1])) return;
-                    }
-
                     this.spawnTimer = 0; let r = Math.random();
-                    let tX = tgt===0 ? (150 + Math.random()*50) : (tgt===1 ? 260 + Math.random()*50 : 380 + Math.random()*50);
-                    let e = { logY: p.logY + 700 + Math.random()*200, x: tX, waitT: 0, maxWait: Math.random()*3000 };
+                    let e = { logY: p.logY + 700 + Math.random()*200, x: 150 + Math.random()*250, waitT: 0, maxWait: Math.random()*3000 };
                     
                     if (this.mapId === 'offroad' && r > 0.85) {
                         if (Math.random() > 0.5) {
                             e.t = 'hole'; e.sp = SPRITES.hole; e.w = 20; e.h = 20; e.s = 0; e.sx = 0;
-                            this.laneTraf[tgt] = p.logY + 400; 
                         } else {
-                            e.t = 'breaker'; e.sp = SPRITES.breaker; e.w = 60; e.h = 10; e.s = 0; e.sx = 0; 
-                            e.x = 200 + tgt*100;
-                            this.laneTraf[tgt] = p.logY + 400; 
+                            e.t = 'breaker'; e.sp = SPRITES.breaker; e.w = 60; e.h = 10; e.s = 0; e.sx = 0; e.x = 200 + Math.floor(Math.random()*3)*100;
                         }
                     } else {
-                        this.laneTraf[tgt] = p.logY;
                         if(r < 0.7) { 
                             e.t = 'v'; e.s = 3 + Math.random()*6; let vR = Math.random();
                             if(vR<0.2) { e.w=10; e.h=16; e.sp=SPRITES.bike; } else if(vR<0.4) { e.w=12; e.h=14; e.sp=SPRITES.auto; }
                             else if(vR<0.7) { e.w=20; e.h=36; e.sp=SPRITES.bwm; } else { e.w=30; e.h=60; e.sp=SPRITES.bus; e.s=2; }
-                        } else if (r < 0.85) {
+                        } else if (r < 0.85) { // V8 Human Implementation
                             e.t = 'p'; e.sp1 = SPRITES.hum1; e.sp2 = SPRITES.hum2; e.w=8; e.h=8; e.sx = (Math.random()>0.5?1:-1) * 2; e.x = e.sx>0?100:500;
-                            e.animT = 0;
-                        } else if (r < 0.95) {
+                            e.animT = 0; // custom animation timer logic per human
+                        } else if (r < 0.95) { // V8 Flat Cow
                             e.t = 'cow'; e.sp = SPRITES.cow; e.w=12; e.h=12; e.sx = (Math.random()>0.5?1:-1) * 0.2; e.x = e.sx>0?150:450;
-                        } else {
+                        } else { // V8 Flat Buffalo
                             e.t = 'buf'; e.sp = SPRITES.buffalo; e.w=16; e.h=16; e.sx = (Math.random()>0.5?1:-1) * 0.1; e.x = e.sx>0?150:450; e.maxWait = 6000;
                         }
                     }
