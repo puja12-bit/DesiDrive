@@ -391,7 +391,7 @@
         let dShop = new Array(450).fill(0); for(let y=0;y<15;y++) for(let x=0;x<30;x++){ if(y<5)dShop[y*30+x]=1;else if(y>5&&x>10&&x<20)dShop[y*30+x]=3;else if(y>8&&(x<8||x>22))dShop[y*30+x]=4;else dShop[y*30+x]=2; }
         let dHouse = new Array(600).fill(0); for(let y=0;y<20;y++) for(let x=0;x<30;x++){ if(y<8){if(x>y&&x<30-y)dHouse[y*30+x]=1;}else{if(y>12&&x>12&&x<18)dHouse[y*30+x]=4;else if(y>10&&y<15&&(x===5||x===25))dHouse[y*30+x]=3;else dHouse[y*30+x]=2;} }
         let dHole = new Array(400).fill(0); for(let y=0;y<20;y++) for(let x=0;x<20;x++){ let ds=Math.sqrt((x-10)**2+(y-10)**2); if(ds<7){dHole[y*20+x]=(ds>4.5)?1:2;} }
-        let dBreak = new Array(600).fill(0); for(let y=0;y<10;y++) for(let x=0;x<60;x++){ if(y>2&&y<8)dBreak[y*60+x]=((Math.floor(x/10))%2===0?1:2); else dBreak[y*60+x]=3; }
+        let dBreak = new Array(600).fill(0); for(let y=0;y<10;y++) for(let x=0;x<60;x++){ if(y<2)dBreak[y*60+x]=4; else if(y>7)dBreak[y*60+x]=3; else dBreak[y*60+x]=((Math.floor(x/10))%2===0?1:2); }
 
         function createBoxySprite(w,h,cb,cw,ct) {
             let data = new Array(w*h).fill(0);
@@ -416,7 +416,7 @@
             bwmWhite: createBoxySprite(24, 40, '#ffffff', '#e0e0e0', '#222'),
             bus: createBoxySprite(30, 60, '#00ff66', '#222', '#111'),
             hole: gen(20, 20, dHole, {1:'#ff0033', 2:'#ffee00'}),
-            breaker: gen(60, 10, dBreak, {1:'#ffaa00', 2:'#111', 3:'#222'})
+            breaker: gen(60, 10, dBreak, {1:'#ffee00', 2:'#000000', 3:'#0a0a0a', 4:'#ffffee'})
         };
 
         let GLOBAL_SCORE = localStorage.getItem('v8_score') ? parseInt(localStorage.getItem('v8_score')) : 0;
