@@ -390,7 +390,7 @@
         let dTree = new Array(400).fill(0); for(let y=0;y<20;y++) for(let x=0;x<20;x++){ let ds=Math.sqrt((x-10)**2+(y-10)**2); if(ds<3)dTree[y*20+x]=4;else if(ds<7)dTree[y*20+x]=(Math.random()>0.5?1:2);else if(ds<9&&Math.random()>0.3)dTree[y*20+x]=(Math.random()>0.5?2:3); }
         let dShop = new Array(450).fill(0); for(let y=0;y<15;y++) for(let x=0;x<30;x++){ if(y<5)dShop[y*30+x]=1;else if(y>5&&x>10&&x<20)dShop[y*30+x]=3;else if(y>8&&(x<8||x>22))dShop[y*30+x]=4;else dShop[y*30+x]=2; }
         let dHouse = new Array(600).fill(0); for(let y=0;y<20;y++) for(let x=0;x<30;x++){ if(y<8){if(x>y&&x<30-y)dHouse[y*30+x]=1;}else{if(y>12&&x>12&&x<18)dHouse[y*30+x]=4;else if(y>10&&y<15&&(x===5||x===25))dHouse[y*30+x]=3;else dHouse[y*30+x]=2;} }
-        let dHole = new Array(400).fill(0); for(let y=0;y<20;y++) for(let x=0;x<20;x++){ let ds=Math.sqrt((x-10)**2+(y-10)**2); if(ds<6)dHole[y*20+x]=(Math.random()>0.4?1:2); }
+        let dHole = new Array(400).fill(0); for(let y=0;y<20;y++) for(let x=0;x<20;x++){ let ds=Math.sqrt((x-10)**2+(y-10)**2); if(ds<7){dHole[y*20+x]=(ds>4.5)?1:2;} }
         let dBreak = new Array(600).fill(0); for(let y=0;y<10;y++) for(let x=0;x<60;x++){ if(y>2&&y<8)dBreak[y*60+x]=((Math.floor(x/10))%2===0?1:2); else dBreak[y*60+x]=3; }
 
         function createBoxySprite(w,h,cb,cw,ct) {
@@ -415,7 +415,7 @@
             bwm: createBoxySprite(20, 36, '#ffffff', '#111', '#222'),
             bwmWhite: createBoxySprite(24, 40, '#ffffff', '#e0e0e0', '#222'),
             bus: createBoxySprite(30, 60, '#00ff66', '#222', '#111'),
-            hole: gen(20, 20, dHole, {1:'#111', 2:'#0a0a0a'}),
+            hole: gen(20, 20, dHole, {1:'#ff0033', 2:'#ffee00'}),
             breaker: gen(60, 10, dBreak, {1:'#ffaa00', 2:'#111', 3:'#222'})
         };
 
@@ -920,19 +920,25 @@
                 for(let e of this.em) {
                     let sy = 650 - (e.logY - this.p.logY);
                     
-                    // V8: True Rendering Logic Updates
-                    // We remove all soft shadow mapping/glows from Cow/Buffalo rendering purely flattening them as blocks.
-                    if (e.t === 'v') {
+                    if (e.t === 'hole') {
+                        this.ctx.shadowBlur = 0;
+                        this.ctx.drawImage(e.sp, e.x - e.w, sy - e.h, e.w*2, e.h*2);
+                        // Add hazard flag dynamically so it appears above the pothole
+                        this.ctx.fillStyle = '#fff';
+                        this.ctx.fillRect(e.x - 2, sy - e.h - 60, 4, 60); // Stick
+                        this.ctx.fillStyle = '#ff0033';
+                        this.ctx.beginPath(); this.ctx.moveTo(e.x, sy - e.h - 60); this.ctx.lineTo(e.x + 25, sy - e.h - 50); this.ctx.lineTo(e.x, sy - e.h - 40); this.ctx.fill();
+                    } else if (e.t === 'breaker') {
+                        this.ctx.shadowBlur = 0;
+                        this.ctx.drawImage(e.sp, e.x - e.w, sy - e.h, e.w*2, e.h*2);
+                    } else if (e.t === 'v') {
                         this.ctx.shadowColor = '#000'; this.ctx.shadowBlur = 10;
                         this.ctx.drawImage(e.sp, e.x - e.w, sy - e.h, e.w*2, e.h*2); 
                     } else if (e.t === 'cow' || e.t === 'buf') {
-                        // NO GLOW as requested. Simple sharp hard-edge pixel drawing!
                         this.ctx.shadowBlur = 0;
                         this.ctx.drawImage(e.sp, e.x - (e.w*2.5)/2, sy - (e.h*2.5)/2, e.w*2.5, e.h*2.5);
                     } else if (e.t === 'p') {
-                        // Human needs strict outline but no soft ambient glow
                         this.ctx.shadowBlur = 0;
-                        // Select sprite array frame based on animT
                         const isF1 = (e.animT % 500) < 250;
                         this.ctx.drawImage(isF1 ? e.sp1 : e.sp2, e.x - (e.w*2)/2, sy - (e.h*2)/2, e.w*2, e.h*2);
                     }
