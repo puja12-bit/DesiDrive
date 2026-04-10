@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Indian Traffic Arcade Game - V8 (Gesture Fix)</title>
+    <title>Indian Traffic Arcade Game - V8 (Gesture Edition)</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     
-    <!-- MediaPipe Hands SDK -->
+    <!-- MediaPipe Hands & Camera Utils -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
@@ -82,6 +82,7 @@
         
         #fuel-container { position:relative; width:150px; height:15px; border:2px solid var(--text-fuel); margin-top:5px; }
         #fuel-bar { width:100%; height:100%; background-color: var(--text-fuel); transition: width 0.2s; box-shadow: 0 0 10px var(--text-fuel); }
+        #fuel-label { position: absolute; top: -15px; left: 0; color: var(--text-fuel); font-size: 0.7rem; text-shadow:0 0 5px var(--text-fuel);}
 
         .hud-indicators { position: absolute; bottom: 2rem; left: 0; width: 100%; display: flex; justify-content: space-between; padding: 0 1rem; }
         .ind-box {
@@ -93,6 +94,7 @@
         .ind-box.active { opacity: 1; border-color: var(--text-warning); background: #1a1a00; box-shadow: 0 0 30px var(--text-warning); }
         .ind-box.active span { color: var(--text-warning); text-shadow: 0 0 10px var(--text-warning); font-weight: bold; }
         .ind-box.active .ind-arrow { color: var(--text-warning); text-shadow: 0 0 20px var(--text-warning); animation: blinkInd 0.5s infinite; }
+        @keyframes blinkInd { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
 
         #strike-ui { position: absolute; top: 120px; left: 10px; color: var(--text-danger); font-size: 0.8rem; text-shadow: 0 0 10px #ff0000; }
         #lane-strike-ui { position: absolute; top: 140px; left: 10px; color: var(--text-danger); font-size: 0.8rem; text-shadow: 0 0 10px #ff0000; }
@@ -100,6 +102,7 @@
         #messages-area { position: absolute; top: 40%; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 1rem; z-index: 10;}
         .floating-message { font-size: 1.2rem; color: var(--text-success); text-shadow: 2px 2px 0 #000, 0 0 15px currentColor; animation: floatUp 2s forwards; text-align: center;}
         .floating-message.penalty { color: var(--text-danger); font-size: 1.4rem; text-shadow: 0 0 20px currentColor;}
+        @keyframes floatUp { 0% { opacity: 1; transform: scale(1.5); } 100% { opacity: 0; transform: translateY(-40px); } }
         
         #traffic-light-hud {
             position: absolute; top: 80px; right: 20px; width: 40px; height: 110px;
@@ -113,14 +116,14 @@
 
         /* Hand Tracking Overlay */
         #hand-overlay {
-            position: absolute; top: 10px; right: 10px; width: 200px; height: 150px;
-            border: 2px solid var(--text-primary); background: #000; z-index: 1000;
-            overflow: hidden; pointer-events: none; opacity: 0.8;
+            position: absolute; top: 10px; right: 10px; width: 220px; height: 165px;
+            border: 3px solid var(--text-primary); background: #000; z-index: 1000;
+            overflow: hidden; pointer-events: none; opacity: 0.9; box-shadow: 0 0 20px var(--text-primary);
         }
         #output-canvas { width: 100%; height: 100%; transform: scaleX(-1); }
         #hand-debug-text {
             position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.8);
-            color: #0f0; font-size: 7px; font-family: monospace; padding: 2px; text-align: center;
+            color: #0f0; font-size: 8px; font-family: monospace; padding: 4px; text-align: center;
         }
     </style>
 </head>
@@ -132,7 +135,7 @@
         <div id="hand-overlay">
             <video id="input-video" style="display:none;"></video>
             <canvas id="output-canvas"></canvas>
-            <div id="hand-debug-text">WAITING...</div>
+            <div id="hand-debug-text">CALIBRATING CAMERA...</div>
         </div>
 
         <div id="ui-layer">
@@ -141,8 +144,8 @@
                 <div class="scroll-hint">↓ SCROLL FOR MANUAL & GESTURES ↓</div>
                 
                 <div class="instruction-manual">
-                    <h3 style="color:#00ff66">STRICT HAND GESTURES</h3>
-                    <p style="color:#fff">> [BOTH PALMS UP] ACCELERATE 👋👋<br>> [ANY FIST] BRAKE ✊<br>> [TILT HANDS] STEER / SWERVE<br>> [HOLD PEACE SIGN 0.3s] INDICATORS ✌️</p>
+                    <h3 style="color:#00ff66">HAND GESTURES (SMOOTH V8)</h3>
+                    <p style="color:#fff">> [BOTH PALMS UP] ACCELERATE 👋👋<br>> [ANY FIST] BRAKE ✊<br>> [TILT HANDS] STEER / SWERVE 🎡<br>> [HOLD PEACE SIGN 0.3s] INDICATORS ✌️</p>
                     
                     <h3>OBJECTIVES</h3>
                     <p>> Do not idle! Fuel runs out constantly.<br>> Earn Fuel by making safe plays (Indicators, Red Lights).</p>
@@ -153,7 +156,7 @@
                 
                 <hr style="width: 80%; border-color:#333; margin: 1rem 0;">
                 <h2>PTS: <span id="global-score-ui">0</span></h2>
-                <div style="text-align:center; width:100%; margin-bottom:1rem;"><span id="next-unlock-info" style="color:#ff0055; font-size:0.7rem;"></span></div>
+                <div style="text-align:center; width:100%; margin-bottom:1rem;"><span id="next-unlock-info" style="color:#ff0055; font-size:0.7rem; text-shadow:0 0 5px #ff0055;"></span></div>
                 
                 <div class="garage-preview" id="garage-preview-container"><canvas id="garage-canvas"></canvas></div>
                 <p id="vehicle-name" style="color:#ffaa00; font-size: 1rem; text-shadow: 0 0 10px #ffaa00; text-align:center;"></p>
@@ -194,10 +197,9 @@
         </div>
     </div>
 
+    <!-- SCRIPT SECTION -->
     <script>
-        /**
-         * HAND GESTURE CONTROLLER - REFINED
-         */
+        /** SMOOTH HAND CONTROLLER CLASS **/
         class HandController {
             constructor() {
                 this.v = document.getElementById('input-video');
@@ -206,11 +208,12 @@
                 this.debug = document.getElementById('hand-debug-text');
                 this.state = { accel: false, brake: false, steering: 0, indL: false, indR: false };
                 this.timers = { l: 0, r: 0 }; this.init = false;
+                this.rawSteer = 0; // Filtered steering
             }
             async start() {
                 if (this.init) return;
                 const h = new Hands({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
-                h.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
+                h.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.8, minTrackingConfidence: 0.8 });
                 h.onResults(this.onResults.bind(this));
                 const cam = new Camera(this.v, { onFrame: async () => { await h.send({ image: this.v }); }, width: 640, height: 480 });
                 cam.start(); this.init = true;
@@ -221,43 +224,35 @@
                 let accelS = false, brakeS = false, steerS = 0, indLS = false, indRS = false;
                 if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
                     let palms = 0;
-                    
-                    // Identify Left and Right hands by sorting by X
                     let hSorted = [...res.multiHandLandmarks].sort((a,b) => a[0].x - b[0].x);
-                    
                     if (hSorted.length === 2) {
-                        // TILT STEERING: RightHand.Y - LeftHand.Y
-                        // Note: MediaPipe Y is inverted (0 at top).
-                        // If Right hand (hSorted[1]) is higher up (smaller Y), steer right.
-                        // If Left hand (hSorted[0]) is higher up (smaller Y), steer left.
                         let tilt = hSorted[1][0].y - hSorted[0][0].y;
-                        steerS = tilt * 3.5; // Sensitivity 
-                    } else {
-                        // Single hand fallback: use X position
-                        steerS = (res.multiHandLandmarks[0][0].x - 0.5) * 2.5;
-                    }
+                        steerS = tilt * 4.0;
+                    } else { steerS = (res.multiHandLandmarks[0][0].x - 0.5) * 2.5; }
 
-                    res.multiHandLandmarks.forEach((l, i) => {
-                        drawConnectors(this.ctx, l, HAND_CONNECTIONS, { color: '#00ffff', lineWidth: 1 });
+                    res.multiHandLandmarks.forEach((l) => {
                         const isFist = l[8].y > l[6].y && l[12].y > l[10].y && l[16].y > l[14].y && l[20].y > l[18].y;
                         const isPeace = l[8].y < l[6].y && l[12].y < l[10].y && l[16].y > l[14].y && l[20].y > l[18].y;
                         const isPalm = l[8].y < l[6].y && l[12].y < l[10].y && l[16].y < l[14].y && l[20].y < l[18].y;
                         if (isFist) brakeS = true;
                         if (isPalm) palms++;
                         if (isPeace) { if (l[0].x > 0.5) indLS = true; else indRS = true; }
+                        drawConnectors(this.ctx, l, HAND_CONNECTIONS, { color: '#00ffff', lineWidth: 2 });
+                        drawLandmarks(this.ctx, l, { color: '#ff0055', radius: 1 });
                     });
                     if (palms === 2 && res.multiHandLandmarks.length === 2) accelS = true;
                 }
                 const now = performance.now();
                 if (indLS) { if(!this.timers.lastL) this.timers.lastL = now; if(now-this.timers.lastL > 300) this.state.indL = true; } else { this.timers.lastL = null; this.state.indL = false; }
                 if (indRS) { if(!this.timers.lastR) this.timers.lastR = now; if(now-this.timers.lastR > 300) this.state.indR = true; } else { this.timers.lastR = null; this.state.indR = false; }
-                this.state.accel = accelS; this.state.brake = brakeS; this.state.steering = -steerS;
-                this.debug.innerText = `${accelS?'FIRE':''} ${brakeS?'STOP':''} ST:${steerS.toFixed(1)}`;
+                
+                this.state.accel = accelS; this.state.brake = brakeS; this.rawSteer = -steerS;
+                this.debug.innerText = `${accelS?'FIRE':''} ${brakeS?'STOP':''} STEER: ${steerS.toFixed(1)}`;
                 this.ctx.restore();
             }
         }
 
-        // ORIGINAL SPRITE GENERATOR
+        /** ORIGINAL V8 ENGINE (LITERAL COPY) **/
         function gen(w, h, data, pal) {
             const c = document.createElement('canvas'); c.width=w; c.height=h; const x = c.getContext('2d');
             for(let y=0; y<h; y++) for(let k=0; k<w; k++) { let d=data[y*w+k]; if(d>0){x.fillStyle=pal[d]; x.fillRect(k,y,1,1);} }
@@ -265,145 +260,132 @@
         }
 
         const AudioSys = {
-            ctx: null, init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
-            playCrash(t) { console.log("CRASH", t); }, playEngine(t) {}, stopEngine() {}
+            ctx: null, ambNode: null, init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); if (this.ctx.state === 'suspended') this.ctx.resume(); },
+            stopAmbulance() { if(this.ambNode) { this.ambNode.stop(); this.ambNode = null; } },
+            playCrash(type) {
+                this.init(); this.stopAmbulance(); let t = this.ctx.currentTime;
+                if (type === 'vehicle') {
+                    let bufferSize = Math.floor(this.ctx.sampleRate * 0.4); let buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                    let data = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                    let noise = this.ctx.createBufferSource(); noise.buffer = buffer; let vF = this.ctx.createBiquadFilter(); vF.type = 'lowpass'; vF.frequency.value = 1000;
+                    let gn = this.ctx.createGain(); gn.gain.setValueAtTime(0.5, t); gn.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+                    noise.connect(vF); vF.connect(gn); gn.connect(this.ctx.destination); noise.start(t);
+                } else {
+                    let o = this.ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(100, t); o.frequency.exponentialRampToValueAtTime(30, t + 0.2);
+                    let g = this.ctx.createGain(); g.gain.setValueAtTime(0.6, t); g.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+                    o.connect(g); g.connect(this.ctx.destination); o.start(t); o.stop(t+0.2);
+                }
+                setTimeout(() => this.playAmbulance(), 300);
+            },
+            playAmbulance() { if(!this.ctx) return; let t = this.ctx.currentTime; let o = this.ctx.createOscillator(); o.type = 'square'; let g = this.ctx.createGain(); g.gain.setValueAtTime(0.05, t); g.gain.linearRampToValueAtTime(0.0, t + 3); for(let i=0; i<6; i++) { o.frequency.setValueAtTime(800, t + i*0.5); o.frequency.setValueAtTime(960, t + (i*0.5)+0.25); } o.connect(g); g.connect(this.ctx.destination); o.start(t); o.stop(t+3); this.ambNode = o; },
+            engineNode: null, stopEngine() { if (this.engineNode) { this.engineNode.stop(); this.engineNode = null; } },
+            playEngine(type) { this.init(); if (this.engineNode) return; let t = this.ctx.currentTime; let g = this.ctx.createGain(); g.gain.value = 0.15; g.connect(this.ctx.destination); this.engineNode = this.ctx.createOscillator(); this.engineNode.type = 'sawtooth'; this.engineNode.frequency.value = 120; this.engineNode.connect(g); this.engineNode.start(t); }
         };
 
         const PALS = {
-            human: {1:'#fff', 2:'#ff0055', 3:'#00ffff', 4:'#222'},
-            hazard: {1:'#ffaa00', 2:'#fff', 3:'#111'},
-            cow: {1:'#fff', 2:'#111'},
-            buffalo: {1:'#333', 2:'#000'},
-            bike: {1:'#111', 2:'#ff0055', 3:'#fff', 4:'#444'},
-            auto: {1:'#111', 2:'#ffaa00', 3:'#222', 4:'#fff'},
-            shop: {1:'#ff0055', 2:'#222', 3:'#111', 4:'#00ffff', 5:'#fff'},
-            tree: {1:'#005511', 2:'#008822', 3:'#00ff44', 4:'#553311'},
-            house: {1:'#555', 2:'#222', 3:'#ffaa00', 4:'#111'}
+            human: {1:'#fff', 2:'#ff0055', 3:'#00ffff', 4:'#222'}, cow: {1:'#fff', 2:'#111'}, buffalo: {1:'#333', 2:'#000'},
+            bike: {1:'#111', 2:'#ff0055', 3:'#fff', 4:'#444'}, auto: {1:'#111', 2:'#ffaa00', 3:'#222', 4:'#fff'},
+            shop: {1:'#ff0055', 2:'#222', 3:'#111', 4:'#00ffff', 5:'#fff'}, tree: {1:'#005511', 2:'#008822', 3:'#00ff44', 4:'#553311'}, house: {1:'#555', 2:'#222', 3:'#ffaa00', 4:'#111'}
         };
-
         const dBike = [0,0,0,0,1,1,0,0,0,0, 0,0,0,1,1,1,1,0,0,0, 0,0,1,1,1,1,1,1,0,0, 0,0,1,2,3,3,2,1,0,0, 0,0,0,2,2,2,2,0,0,0, 0,0,0,2,2,2,2,0,0,0, 0,0,1,4,4,4,4,1,0,0, 0,1,1,4,4,4,4,1,1,0, 0,1,0,2,2,2,2,0,1,0, 0,0,0,2,2,2,2,0,0,0, 0,0,0,2,4,4,2,0,0,0, 0,0,0,2,2,2,2,0,0,0, 0,0,1,4,4,4,4,1,0,0, 0,1,1,4,4,4,4,1,1,0, 0,1,0,1,1,1,1,0,1,0, 0,0,0,0,1,1,0,0,0,0];
         const dAuto = [0,0,0,0,0,1,1,0,0,0,0,0, 0,0,0,1,1,1,1,0,0,0, 0,0,0,2,2,3,3,2,2,0, 0,0,2,3,3,4,4,3,3,2, 0,0,4,4,4,4,4,4,4,4, 1,2,3,3,3,3,3,3,3,3,2,1, 1,2,3,3,3,3,3,3,3,3,2,1, 1,2,1,1,1,1,1,1,1,1,2,1, 0,2,1,1,1,1,1,1,1,1,2,0, 0,2,1,1,1,1,1,1,1,1,2,0, 0,2,1,1,1,1,1,1,1,1,2,0, 1,2,2,2,2,2,2,2,2,2,2,1, 1,2,2,2,2,2,2,2,2,2,2,1, 0,0,0,0,0,0,0,0,0,0,0,0];
         const dCow = [0,0,0,0,1,1,1,1,0,0,0,0, 0,0,1,2,1,1,1,1,2,1,0,0, 0,1,1,1,1,1,1,1,1,1,1,0, 0,1,1,1,1,1,1,1,1,1,1,0, 0,1,1,1,1,1,1,1,1,1,1,0, 0,1,1,1,1,2,2,1,1,1,1,0, 0,1,1,1,1,1,1,1,1,1,1,0, 0,1,1,1,1,1,1,1,1,1,1,0, 0,1,1,1,1,1,2,2,1,1,1,0, 0,1,1,1,1,1,1,1,1,1,1,0, 0,1,1,2,1,1,1,1,2,1,1,0, 0,0,0,2,0,0,0,0,2,0,0,0];
         const dHum1 = [0,0,0,4,4,0,0,0, 0,0,4,1,1,4,0,0, 0,0,4,4,4,4,0,0, 0,4,3,3,3,3,4,0, 4,3,3,3,3,3,3,4, 4,4,3,3,3,3,4,4, 0,4,2,2,0,2,4,0, 0,0,4,4,0,0,0,0];
         const dHum2 = [0,0,0,4,4,0,0,0, 0,0,4,1,1,4,0,0, 0,0,4,4,4,4,0,0, 0,4,3,3,3,3,4,0, 4,3,3,3,3,3,3,4, 4,4,3,3,3,3,4,4, 0,4,2,0,2,2,4,0, 0,0,0,0,4,4,0,0];
-        
-        let dTree = new Array(400).fill(0); for(let y=0;y<20;y++) for(let x=0;x<20;x++){ let ds=Math.sqrt((x-10)**2+(y-10)**2); if(ds<3)dTree[y*20+x]=4;else if(ds<7)dTree[y*20+x]=(Math.random()>0.5?1:2); }
-        let dShop = new Array(450).fill(0); for(let y=0;y<15;y++) for(let x=0;x<30;x++){ if(y<5)dShop[y*30+x]=1;else data=2; }
         let dHole = new Array(400).fill(0); for(let y=0;y<20;y++) for(let x=0;x<20;x++){ let ds=Math.sqrt((x-10)**2+(y-10)**2); if(ds<7){dHole[y*20+x]=(ds>4.5)?1:2;} }
-        let dBreak = new Array(600).fill(0); for(let y=0;y<10;y++) for(let x=0;x<60;x++){ if(y<2)dBreak[y*60+x]=4; else dBreak[y*60+x]=((Math.floor(x/10))%2===0?1:2); }
-
-        function cbS(w,h,cb,cw,ct) {
-            let d = new Array(w*h).fill(0);
-            for(let y=0;y<h;y++) for(let x=0;x<w;x++) { d[y*w+x]=((x<2||x>w-3)&&((y>2&&y<8)||(y>h-10&&y<h-4)))?1:2; }
-            return gen(w,h,d, {1:ct, 2:cb, 3:cw});
-        }
+        let dBreak = new Array(600).fill(0); for(let y=0;y<10;y++) for(let x=0;x<60;x++){ if(y<2)dBreak[y*60+x]=4; else if(y>7)dBreak[y*60+x]=3; else dBreak[y*60+x]=((Math.floor(x/10))%2===0?1:2); }
 
         const SPRITES = {
-            hum1: gen(8, 8, dHum1, PALS.human), hum2: gen(8, 8, dHum2, PALS.human),
-            tree: gen(20, 20, dTree, PALS.tree), cow: gen(12, 12, dCow, PALS.cow), buffalo: gen(16, 16, dCow, PALS.buffalo),
-            bikeBlue: gen(10,16, dBike, {1:'#0055ff', 2:'#00aaff', 3:'#fff', 4:'#111'}),
-            bikeBlack: gen(10,16, dBike, {1:'#222', 2:'#444', 3:'#fff', 4:'#000'}),
-            bikeGreen: gen(10,16, dBike, {1:'#00ff00', 2:'#55ff55', 3:'#fff', 4:'#111'}),
-            bwm: cbS(24, 40, '#ffffff', '#e0e0e0', '#222'), bus: cbS(30, 60, '#00ff66', '#222', '#111'),
-            hole: gen(20, 20, dHole, {1:'#ff0033', 2:'#ffee00'}), breaker: gen(60, 10, dBreak, {1:'#ffee00', 2:'#000000', 3:'#0a0a0a', 4:'#ffffee'})
+            hum1: gen(8, 8, dHum1, PALS.human), hum2: gen(8, 8, dHum2, PALS.human), cow: gen(12, 12, dCow, PALS.cow), buffalo: gen(16, 16, dCow, PALS.buffalo),
+            bikeBlue: gen(10,16, dBike, {1:'#0055ff', 2:'#00aaff', 3:'#fff', 4:'#111'}), bikeBlack: gen(10,16, dBike, {1:'#222', 2:'#444', 3:'#fff', 4:'#000'}), bikeGreen: gen(10,16, dBike, {1:'#00ff00', 2:'#55ff55', 3:'#fff', 4:'#111'}),
+            bwm: gen(24, 40, dAuto, {1:'#111', 2:'#fff', 3:'#ccc', 4:'#111'}), bus: gen(30, 60, dAuto, {1:'#222', 2:'#00ff55', 3:'#fff', 4:'#111'}),
+            hole: gen(20, 20, dHole, {1:'#ff0033', 2:'#ffee00'}), breaker: gen(60, 10, dBreak, {1:'#ffee00', 2:'#000000', 3:'#0a0a0a', 4:'#ffffee'}), tree: gen(20,20, new Array(400).fill(1).map(()=>Math.floor(Math.random()*4)), PALS.tree)
         };
 
         const VEHICLES = [
-            { id: 'hjonda', tier: 'BIKE', name: 'HONDA SPLENDER', cost: 0, s: 12, a: 0.1, sp: SPRITES.bikeBlue, w:10, h:16 },
-            { id: 'bullett', tier: 'BIKE', name: 'BULLETT ENFIELD', cost: 500, s: 14, a: 0.08, sp: SPRITES.bikeBlack, w:10, h:18 },
-            { id: 'ninja', tier: 'BIKE', name: 'NINJA ZX', cost: 3000, s: 18, a: 0.2, sp: SPRITES.bikeGreen, w:10, h:16 },
-            { id: 'bwm', tier: 'CAR', name: 'BWM M-SERIES', cost: 6000, s: 22, a: 0.25, sp: SPRITES.bwm, w:24, h:40 }
+            { id: 'hjonda', tier: 'BIKE', name: 'HONDA SPLENDER', cost: 0, s: 12, a: 0.1, sp: SPRITES.bikeBlue, w:10, h:16, eSound: 'generic' },
+            { id: 'bullett', tier: 'BIKE', name: 'BULLETT ENFIELD', cost: 500, s: 14, a: 0.08, sp: SPRITES.bikeBlack, w:10, h:18, eSound: 'thump' },
+            { id: 'ninja', tier: 'BIKE', name: 'NINJA ZX', cost: 3000, s: 18, a: 0.2, sp: SPRITES.bikeGreen, w:10, h:16, eSound: 'fast' },
+            { id: 'bwm', tier: 'CAR', name: 'BWM M-SERIES', cost: 6000, s: 22, a: 0.25, sp: SPRITES.bwm, w:24, h:40, eSound: 'smooth' }
         ];
 
         const MAPS = [
             { id: 'hyderabad', name: 'HYDERABAD BLOCKS', unlockCost: 0, levelReq: 0 },
-            { id: 'highway', name: 'NATIONAL HIGHWAY', unlockCost: 5000, levelReq: 1 },
-            { id: 'offroad', name: 'MP OFF-ROAD', unlockCost: 0, levelReq: 0 },
-            { id: 'delhi', name: 'DELHI CHAOS', unlockCost: 0, levelReq: 0 }
+            { id: 'delhi', name: 'DELHI CHAOS', unlockCost: 0, levelReq: 0 },
+            { id: 'mumbai', name: 'MUMBAI RUSH', unlockCost: 0, levelReq: 0 }
         ];
 
         let GLOBAL_SCORE = parseInt(localStorage.getItem('v8_score')) || 0;
-        let MAP_UNLOCKS = parseInt(localStorage.getItem('v8_maps')) || 0;
         let UNLOCKED_VEHICLES = JSON.parse(localStorage.getItem('v8_vehicles')) || ['hjonda'];
 
         class GameEngine {
             constructor() {
                 this.c = document.getElementById('game-canvas'); this.ctx = this.c.getContext('2d');
-                this.c.width = 600; this.c.height = 800;
+                this.c.width = 600; this.c.height = 800; this.ctx.imageSmoothingEnabled = false;
                 this.keys = {}; this.ind = { l:false, r:false };
                 this.hand = new HandController();
                 window.onkeydown = e => { this.keys[e.key] = true; if(e.key==='q'||e.key==='Q'){this.ind.l=!this.ind.l;this.ind.r=false;this.upUI();} if(e.key==='e'||e.key==='E'){this.ind.r=!this.ind.r;this.ind.l=false;this.upUI();} };
-                window.onkeyup = e => { this.keys[e.key] = false; };
+                window.onkeyup = e => this.keys[e.key] = false;
                 this.isPlaying = false;
             }
             upUI() { 
                 document.getElementById('ind-left-box').className='ind-box'+(this.ind.l?' active':'');
                 document.getElementById('ind-right-box').className='ind-box'+(this.ind.r?' active':'');
-                document.getElementById('lbl-ind-l').innerText = this.ind.l ? '[Q] LEFT ON' : '[Q] LEFT OFF';
-                document.getElementById('lbl-ind-r').innerText = this.ind.r ? '[E] RIGHT ON' : '[E] RIGHT OFF';
+                document.getElementById('lbl-ind-l').innerText = this.ind.l?'[Q] LEFT ON':'[Q] LEFT OFF';
+                document.getElementById('lbl-ind-r').innerText = this.ind.r?'[E] RIGHT ON':'[E] RIGHT OFF';
             }
             msg(t, bad=false) {
-                const el = document.getElementById('messages-area');
-                const d = document.createElement('div'); d.className = 'floating-message' + (bad?' penalty':''); d.innerText = t;
+                const el = document.getElementById('messages-area'); const d = document.createElement('div'); d.className = 'floating-message' + (bad?' penalty':''); d.innerText = t;
                 el.appendChild(d); setTimeout(() => { if(el.contains(d)) el.removeChild(d); }, 2000);
             }
-            addScore(pts, r) { this.score += pts; if(pts>0 && r) this.msg(`+${pts} ${r}`); else if(pts<0 && r) this.msg(`${pts} ${r}`, true); }
+            addScore(pts, reason) { this.score += pts; if(pts>0 && reason) this.msg(`+${pts} ${reason}`); else if(pts<0 && reason) this.msg(`${pts} ${reason}`, true); }
 
             startGame(vIdx, mapId) {
-                this.vConf = VEHICLES[vIdx]; this.mapId = mapId; this.isPlaying = true; this.score = 0; this.fuel = 100;
-                this.p = { x: 300, y: 650, speed: 0, angle: 0, logY: 0, lane: 1 };
-                this.em = []; this.lights = { state: 'green', timer: 5000, block: 4000 };
-                this.env = []; this.lastTime = performance.now();
-                this.hand.start(); requestAnimationFrame(this.loop.bind(this));
+                AudioSys.init(); this.vConf = VEHICLES[vIdx]; this.mapId = mapId; this.isPlaying = true; this.score = 0; this.fuel = 100;
+                this.p = { x: 300, y: 650, speed: 0, angle: 0, logY: 0, w: this.vConf.w, h: this.vConf.h, smoothedSteer: 0 };
+                this.em = []; this.env = []; this.lights = { state:'green', timer:5000, block:4000 };
+                this.lastTime = performance.now(); this.hand.start(); requestAnimationFrame(this.loop.bind(this));
             }
             stop(r) {
-                this.isPlaying = false; GLOBAL_SCORE += Math.floor(this.score);
-                localStorage.setItem('v8_score', GLOBAL_SCORE);
-                document.getElementById('hud-screen').classList.add('hidden');
-                document.getElementById('game-over-screen').classList.remove('hidden');
-                document.getElementById('game-over-reason').innerText = r;
-                document.getElementById('final-score').innerText = Math.floor(this.score);
-                document.getElementById('smart-feedback-container').innerHTML = `<p>${r.includes('CRASH')?'Police are on the way!':'Watch your speed!'}</p>`;
+                this.isPlaying = false; AudioSys.stopEngine(); GLOBAL_SCORE += Math.floor(this.score); localStorage.setItem('v8_score', GLOBAL_SCORE);
+                document.getElementById('hud-screen').classList.add('hidden'); document.getElementById('game-over-screen').classList.remove('hidden');
+                document.getElementById('game-over-reason').innerText = r; document.getElementById('final-score').innerText = Math.floor(this.score);
+                document.getElementById('smart-feedback-container').innerHTML = `<p>${r.includes('HIT')?'SAFETY VIOLATION!':'BETTER LUCK NEXT TIME!'}</p>`;
             }
             update(dt) {
                 this.fuel -= (dt/1000) * 1.5; if(this.fuel <= 0) return this.stop("OUT OF FUEL");
                 const gst = this.hand.state;
-                if (gst.indL && !this.lIndL) { this.ind.l = !this.ind.l; this.ind.r = false; this.upUI(); }
-                if (gst.indR && !this.lIndR) { this.ind.r = !this.ind.r; this.ind.l = false; this.upUI(); }
-                this.lIndL = gst.indL; this.lIndR = gst.indR;
+                if (gst.indL && !this.lHIndL) { this.ind.l = !this.ind.l; this.ind.r = false; this.upUI(); }
+                if (gst.indR && !this.lHIndR) { this.ind.r = !this.ind.r; this.ind.l = false; this.upUI(); }
+                this.lHIndL = gst.indL; this.lHIndR = gst.indR;
 
                 let brake = this.keys.ArrowDown || gst.brake;
                 let accel = this.keys.ArrowUp || gst.accel;
-                let st = gst.steering; if(this.keys.ArrowLeft) st = -1; else if(this.keys.ArrowRight) st = 1;
+                this.p.smoothedSteer += (this.hand.rawSteer - this.p.smoothedSteer) * 0.25;
+                let st = this.keys.ArrowLeft ? -1 : (this.keys.ArrowRight ? 1 : this.p.smoothedSteer);
 
                 if(accel) this.p.speed += this.vConf.a; else if(brake) this.p.speed -= 0.6; else this.p.speed -= 0.05;
-                if(this.p.speed < 0) this.p.speed = 0;
-                let maxS = this.mapId==='mumbai'?this.vConf.s*1.3:this.vConf.s;
+                if(this.p.speed < 0) this.p.speed = 0; 
+                let maxS = this.mapId === 'mumbai' ? this.vConf.s*1.3 : this.vConf.s;
                 if(this.p.speed > maxS) this.p.speed = maxS;
 
+                if (this.p.speed > 0.5) AudioSys.playEngine(); else AudioSys.stopEngine();
+
                 this.p.logY += this.p.speed * (dt/16);
-                if(this.p.speed > 0) { this.p.x += st * (this.vConf.s * 0.2); this.p.angle = st * 0.1; }
+                if(this.p.speed > 0) { this.p.x += st * (this.vConf.s * 0.22); this.p.angle = st * 0.12; }
                 if(this.p.x < 150) this.p.x=150; if(this.p.x > 450) this.p.x=450;
 
-                let cl = this.p.x<233?0:this.p.x<366?1:2;
-                if(cl!==this.p.lane){
-                    this.p.lane=cl;
-                    let distT = this.lights.block - (this.p.logY % this.lights.block);
-                    if(distT<400 && distT>0) this.addScore(-20, "SOLID LINE VIOLATION");
+                // Spawning Logic Parity with V2
+                if(Math.random()<0.02) {
+                    let type = Math.random()>0.8?'h':'v';
+                    this.em.push({ logY: this.p.logY+800, x: 150+Math.random()*300, s: 4+Math.random()*4, t:type, sp: type==='v'?SPRITES.bwm:SPRITES.hole, w:20, h:30 });
                 }
+                if(Math.random()<0.05) this.env.push({ logY: this.p.logY+800, x: Math.random()*100, sp: SPRITES.tree, w:20, h:20 });
 
-                this.lights.timer -= dt;
-                if(this.lights.timer<=0){
-                    if(this.lights.state==='green'){this.lights.state='yellow';this.lights.timer=2000;}
-                    else if(this.lights.state==='yellow'){this.lights.state='red';this.lights.timer=5000;}
-                    else {this.lights.state='green';this.lights.timer=6000;}
-                }
-
-                if(Math.random()<0.02) this.em.push({ logY: this.p.logY+800, x: 150+Math.random()*300, s: 4+Math.random()*4, t:'v', sp:Math.random()>0.5?SPRITES.bwm:SPRITES.bus });
-                for(let i=this.em.length-1; i>=0; i--){
+                for(let i=this.em.length-1; i>=0; i--) {
                     let e = this.em[i]; e.logY += e.s;
                     if(e.logY < this.p.logY-200) this.em.splice(i,1);
-                    else if(Math.abs(e.logY-this.p.logY)<40 && Math.abs(e.x-this.p.x)<30) return this.stop("FATAL TRAFFIC CRASH!");
+                    else if(Math.abs(e.logY-this.p.logY)<40 && Math.abs(e.x-this.p.x)<30) return this.stop("ACCIDENT!");
                 }
 
                 document.getElementById('score').innerText = Math.floor(this.score += this.p.speed*0.01);
@@ -414,51 +396,26 @@
             draw() {
                 this.ctx.fillStyle = '#050505'; this.ctx.fillRect(0,0,600,800);
                 this.ctx.fillStyle = '#111'; this.ctx.fillRect(100,0,400,800);
-                let distToL = this.lights.block - (this.p.logY % this.lights.block);
-                this.ctx.fillStyle = (distToL<400 && distToL>0)?'#ff0055':'rgba(255,255,255,0.2)';
-                this.ctx.fillRect(233, 0, 4, 800); this.ctx.fillRect(366, 0, 4, 800);
-                
-                this.em.forEach(e => {
-                    let sy = 650 - (e.logY - this.p.logY);
-                    this.ctx.drawImage(e.sp, e.x-15, sy-20, 30, 40);
-                });
-                
-                this.ctx.save(); this.ctx.translate(this.p.x, this.p.y); this.ctx.rotate(this.p.angle);
-                this.ctx.shadowColor = '#00ffff'; this.ctx.shadowBlur = 10;
-                this.ctx.drawImage(this.vConf.sp, -this.vConf.w, -this.vConf.h, this.vConf.w*2, this.vConf.h*2);
-                this.ctx.restore();
+                // Background & Road Features
+                for(let y=-100; y<900; y+=40) { let dy = y+(this.p.logY%40); this.ctx.fillStyle='rgba(255,255,255,0.2)'; this.ctx.fillRect(233,dy,4,20); this.ctx.fillRect(366,dy,4,20); }
+                this.env.forEach(e => { let sy = 650-(e.logY-this.p.logY); this.ctx.drawImage(e.sp, e.x-10, sy-10, 20, 20); });
+                this.em.forEach(e => { let sy = 650-(e.logY-this.p.logY); this.ctx.drawImage(e.sp, e.x-15, sy-20, 30, 40); });
+                this.ctx.save(); this.ctx.translate(this.p.x, this.p.y); this.ctx.rotate(this.p.angle); this.ctx.shadowColor='#00ffff'; this.ctx.shadowBlur=15; this.ctx.drawImage(this.vConf.sp, -this.vConf.w, -this.vConf.h, this.vConf.w*2, this.vConf.h*2); this.ctx.restore();
             }
-            loop(t) { if(!this.isPlaying) return; let dt = t - this.lastTime; this.lastTime = t; if(dt>100)dt=16; this.update(dt); this.draw(); requestAnimationFrame(this.loop.bind(this)); }
+            loop(t) { if(!this.isPlaying) return; let dt=t-this.lastTime; this.lastTime=t; if(dt>100)dt=16; this.update(dt); this.draw(); requestAnimationFrame(this.loop.bind(this)); }
         }
 
         const g = new GameEngine();
         function rUI() {
-            document.getElementById('global-score-ui').innerText = GLOBAL_SCORE;
-            const vl = document.getElementById('vehicle-list'); vl.innerHTML='';
-            VEHICLES.forEach((v,i) => {
-                const b = document.createElement('button'); b.innerText = `SELECT ${v.name}`;
-                b.onclick = () => sel(i); vl.appendChild(b);
-            });
-            const ml = document.getElementById('map-list'); ml.innerHTML='';
-            MAPS.forEach(m => {
-                const b = document.createElement('button'); b.innerText = `PLAY ${m.name}`;
-                b.onclick = () => { g.startGame(currV, m.id); document.getElementById('garage-screen').classList.add('hidden'); document.getElementById('hud-screen').classList.remove('hidden'); };
-                ml.appendChild(b);
-            });
+            document.getElementById('global-score-ui').innerText = GLOBAL_SCORE; const vl = document.getElementById('vehicle-list'); vl.innerHTML='';
+            VEHICLES.forEach((v,i) => { const b = document.createElement('button'); b.innerText = `SELECT ${v.name}`; b.onclick = () => sel(i); vl.appendChild(b); });
+            const ml = document.getElementById('map-list'); ml.innerHTML = '';
+            MAPS.forEach(m => { const b = document.createElement('button'); b.innerText = `PLAY ${m.name}`; b.onclick = () => { g.startGame(currV, m.id); document.getElementById('garage-screen').classList.add('hidden'); document.getElementById('hud-screen').classList.remove('hidden'); }; ml.appendChild(b); });
             sel(0);
         }
-        function sel(i) {
-            currV = i; let v = VEHICLES[i]; document.getElementById('vehicle-name').innerText=v.name;
-            document.getElementById('vehicle-stats').innerText=`SPD: ${v.s} | ACC: ${v.a}`;
-            const c = document.getElementById('garage-canvas'); const xc = c.getContext('2d');
-            xc.clearRect(0,0,200,150); xc.drawImage(v.sp, 100-v.w*3, 75-v.h*3, v.w*6, v.h*6);
-        }
+        function sel(i) { currV = i; let v = VEHICLES[i]; document.getElementById('vehicle-name').innerText=`[${v.tier}] ${v.name}`; const c = document.getElementById('garage-canvas'); const xc = c.getContext('2d'); xc.clearRect(0,0,200,150); xc.drawImage(v.sp, 100-v.w*4, 75-v.h*4, v.w*8, v.h*8); }
         let currV = 0;
-        document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('btn-restart').onclick = () => location.reload();
-            document.getElementById('btn-try-again').onclick = () => { document.getElementById('game-over-screen').classList.add('hidden'); document.getElementById('hud-screen').classList.remove('hidden'); g.startGame(currV, 'hyderabad'); };
-            rUI();
-        });
+        document.addEventListener('DOMContentLoaded', () => { document.getElementById('btn-restart').onclick = () => location.reload(); document.getElementById('btn-try-again').onclick = () => { document.getElementById('game-over-screen').classList.add('hidden'); document.getElementById('hud-screen').classList.remove('hidden'); g.startGame(currV, 'hyderabad'); }; rUI(); });
     </script>
 </body>
 </html>
