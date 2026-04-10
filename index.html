@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Indian Traffic Arcade Game - V8</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <!-- MediaPipe Hands SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <style>
         :root {
             --bg-color: #000; --text-primary: #00ffff; --text-warning: #ffaa00;
@@ -117,6 +121,12 @@
 <body>
     <div id="game-container">
         <canvas id="game-canvas"></canvas>
+        <!-- Hand Tracking UI -->
+        <div id="hand-tracking-container" style="position:absolute; top:10px; right:10px; width:120px; height:90px; border:2px solid var(--text-primary); z-index:100; background:#000; overflow:hidden; opacity:0.7;">
+            <video id="input-video" style="display:none;"></video>
+            <canvas id="output-canvas" style="width:100%; height:100%; transform: scaleX(-1);"></canvas>
+            <div id="hand-status" style="position:absolute; bottom:0; width:100%; background:rgba(0,0,0,0.8); color:#0f0; font-size:8px; text-align:center; font-family:monospace; padding:2px;">WAITING...</div>
+        </div>
         <div id="ui-layer">
             
             <div id="garage-screen" class="screen">
@@ -208,7 +218,9 @@
         </div>
     </div>
 
-    <script>
+    <script type="module">
+        import { HandController } from './js/HandController.js';
+
         function gen(w, h, data, pal) {
             const c = document.createElement('canvas'); c.width=w; c.height=h; const x = c.getContext('2d');
             for(let y=0; y<h; y++) for(let k=0; k<w; k++) { let d=data[y*w+k]; if(d>0){x.fillStyle=pal[d]; x.fillRect(k,y,1,1);} }
@@ -433,7 +445,10 @@
         const MAPS = [
             { id: 'hyderabad', name: 'HYDERABAD BLOCKS', unlockCost: 0, levelReq: 0 },
             { id: 'highway', name: 'NATIONAL HIGHWAY', unlockCost: 5000, levelReq: 1 },
-            { id: 'offroad', name: 'MP OFF-ROAD', unlockCost: 0, levelReq: 0 }
+            { id: 'offroad', name: 'MP OFF-ROAD', unlockCost: 0, levelReq: 0 },
+            { id: 'delhi', name: 'DELHI CHAOS', unlockCost: 0, levelReq: 0 },
+            { id: 'mumbai', name: 'MUMBAI RUSH', unlockCost: 0, levelReq: 0 },
+            { id: 'tamilnadu', name: 'TAMIL NADU FLOW', unlockCost: 0, levelReq: 0 }
         ];
 
         function saveProgress() {
@@ -455,6 +470,10 @@
                 });
                 window.addEventListener('keyup', e => { this.keys[e.key] = false; });
                 this.isPlaying = false; this.boundLoop = this.loop.bind(this);
+                
+                // Hand Controller
+                this.handCtrl = new HandController();
+                this.handCtrl.start();
             }
 
             updateUIIndicators() {
@@ -475,6 +494,7 @@
                 this.em = []; this.spawnTimer = 0;
                 this.lights = { timer: 5000, state: 'green', block: 4000 };
                 this.env = []; this.envSpawnTimer = 0;
+                this.delhiChaosTimer = 0; this.delhiStateTimer = 0; this.currentDelhiEvent = null;
                 this.lastTime = performance.now();
                 this.strikes = 0; this.laneStrikes = 0; this.idleTime = 0;
                 this.missedPoints = 0; this.lastLaneRewardT = 0;
@@ -620,11 +640,14 @@
                 }
 
                 if (p.speed > 3) this.addScore(p.speed * (dt/1000) * 0.4, null);
-                let brake = this.keys.ArrowDown; let accel = this.keys.ArrowUp;
+                let brake = this.keys.ArrowDown || this.handCtrl.state.down; 
+                let accel = this.keys.ArrowUp || this.handCtrl.state.up;
                 
                 if(accel) p.speed += this.vConf.a;
                 else if(brake) p.speed -= 0.6; else p.speed -= 0.05;
-                if(p.speed < 0) p.speed = 0; if(p.speed > this.vConf.s) p.speed = this.vConf.s;
+                if(p.speed < 0) p.speed = 0; 
+                let maxS = this.mapId === 'mumbai' ? this.vConf.s * 1.3 : this.vConf.s;
+                if(p.speed > maxS) p.speed = maxS;
                 
                 p.logY += p.speed * (dt/16);
                 const distToLight = this.lights.block - (p.logY % this.lights.block);
@@ -632,7 +655,13 @@
                 if (brake && p.speed > 5 && !this.bf) { this.bf = true; if(!this.ind.l && !this.ind.r) this.addScore(-10, "SUDDEN BRAKE"); }
                 if (!brake) this.bf = false;
 
-                let st = 0; if(this.keys.ArrowLeft) st = -1; else if(this.keys.ArrowRight) st = 1;
+                let st = 0; 
+                if(this.keys.ArrowLeft || this.handCtrl.state.left) st = -1; 
+                else if(this.keys.ArrowRight || this.handCtrl.state.right) st = 1;
+
+                if (this.handCtrl.state.q) { this.ind.l = !this.ind.l; this.ind.r = false; this.updateUIIndicators(); }
+                if (this.handCtrl.state.e) { this.ind.r = !this.ind.r; this.ind.l = false; this.updateUIIndicators(); }
+
                 if (p.speed > 0) {
                     p.x += st * (this.vConf.s * 0.2); p.angle = st * 0.1;
 
@@ -705,9 +734,13 @@
                 for(let i=this.env.length-1; i>=0; i--) { if(this.env[i].logY < p.logY - 200) this.env.splice(i,1); }
 
                 this.spawnTimer += dt;
-                if(this.spawnTimer > 400 && this.em.length < 30 && distToLight > 200) {
+                let sDelay = this.mapId === 'mumbai' ? 200 : (this.mapId === 'tamilnadu' ? 600 : 400); // stable natural gaps
+                if(this.spawnTimer > sDelay && this.em.length < 30 && distToLight > 200) {
                     this.spawnTimer = 0; let r = Math.random();
-                    let e = { logY: p.logY + 700 + Math.random()*200, x: 150 + Math.random()*250, waitT: 0, maxWait: Math.random()*3000 };
+                    if (this.mapId === 'tamilnadu') r = Math.random() * 0.7; // virtually no raw obstacles
+                    
+                    let sDist = this.mapId === 'mumbai' ? 500 : 700;
+                    let e = { logY: p.logY + sDist + Math.random()*200, x: 150 + Math.random()*250, waitT: 0, maxWait: Math.random()*3000 };
                     
                     if (this.mapId === 'offroad' && r > 0.85) {
                         if (Math.random() > 0.5) {
@@ -716,10 +749,19 @@
                             e.t = 'breaker'; e.sp = SPRITES.breaker; e.w = 60; e.h = 10; e.s = 0; e.sx = 0; e.x = 200 + Math.floor(Math.random()*3)*100;
                         }
                     } else {
-                        if(r < 0.7) { 
-                            e.t = 'v'; e.s = 3 + Math.random()*6; let vR = Math.random();
-                            if(vR<0.2) { e.w=10; e.h=16; e.sp=SPRITES.bike; } else if(vR<0.4) { e.w=12; e.h=14; e.sp=SPRITES.auto; }
-                            else if(vR<0.7) { e.w=20; e.h=36; e.sp=SPRITES.bwm; } else { e.w=30; e.h=60; e.sp=SPRITES.bus; e.s=2; }
+                        if(r < 0.7 || this.mapId === 'mumbai') { 
+                            e.t = 'v'; e.s = 3 + Math.random()*6; 
+                            if (this.mapId === 'mumbai') e.s *= 1.3;
+                            if (this.mapId === 'tamilnadu') e.s = 6; // all vehicles perfectly synced flowing speed
+                            
+                            if (this.mapId === 'mumbai' && Math.random() < 0.4) {
+                                e.w = 30; e.h = 60; e.sp = SPRITES.bus; e.s = 2; // massive disruption
+                            } else {
+                                let vR = Math.random();
+                                if(vR<0.2) { e.w=10; e.h=16; e.sp=SPRITES.bike; } else if(vR<0.4) { e.w=12; e.h=14; e.sp=SPRITES.auto; }
+                                else if(vR<0.7) { e.w=20; e.h=36; e.sp=SPRITES.bwm; } else { e.w=30; e.h=60; e.sp=SPRITES.bus; e.s=2; }
+                            }
+                            e.baseSpeed = e.s; e.chaosTag = null;
                         } else if (r < 0.85) { // V8 Human Implementation
                             e.t = 'p'; e.sp1 = SPRITES.hum1; e.sp2 = SPRITES.hum2; e.w=8; e.h=8; e.sx = (Math.random()>0.5?1:-1) * 2; e.x = e.sx>0?100:500;
                             e.animT = 0; // custom animation timer logic per human
@@ -732,12 +774,79 @@
                     this.em.push(e);
                 }
 
+                if (this.mapId === 'delhi') {
+                    this.delhiChaosTimer += dt;
+                    if (this.currentDelhiEvent) this.delhiStateTimer += dt;
+
+                    if (!this.currentDelhiEvent && this.delhiChaosTimer > 2500 + Math.random()*1500) {
+                        this.delhiChaosTimer = 0;
+                        let validEvents = [1, 2, 3, 4];
+                        let activeEvt = validEvents[Math.floor(Math.random() * validEvents.length)];
+                        
+                        let vehiclesAhead = this.em.filter(e => e.t === 'v' && e.logY > p.logY + 150);
+                        
+                        if (activeEvt === 1 && vehiclesAhead.length > 0) {
+                            let candidates = vehiclesAhead.filter(e => e.sp === SPRITES.bike || e.sp === SPRITES.auto);
+                            if (candidates.length > 0) {
+                                let c = candidates[Math.floor(Math.random() * candidates.length)];
+                                c.chaosTag = 'lane_cut'; c.chaosTargetX = p.x;
+                                this.currentDelhiEvent = 1; this.delhiStateTimer = 0;
+                            }
+                        } else if (activeEvt === 2 && vehiclesAhead.length > 0) {
+                            this.currentDelhiEvent = 2; this.delhiStateTimer = 0;
+                            vehiclesAhead.forEach(e => e.chaosTag = 'stop_go');
+                        } else if (activeEvt === 3 && vehiclesAhead.length >= 2) {
+                            let c1 = vehiclesAhead[0], c2 = vehiclesAhead[1];
+                            c1.chaosTag = 'block_wall'; c2.chaosTag = 'block_wall';
+                            c1.chaosBaseX = Math.random()>0.5 ? 150 : 250;
+                            c2.chaosBaseX = c1.chaosBaseX + 100;
+                            c1.x = c1.chaosBaseX; c2.x = c2.chaosBaseX;
+                            c2.logY = c1.logY; c2.s = c1.s;
+                            this.currentDelhiEvent = 3; this.delhiStateTimer = 0;
+                        } else if (activeEvt === 4 && vehiclesAhead.length >= 2) {
+                            let cand = vehiclesAhead.slice(0, 2);
+                            cand[0].chaosTag = 'gap_front'; cand[1].chaosTag = 'gap_back';
+                            cand[0].logY = cand[1].logY + 180;
+                            cand[0].x = cand[1].x; cand[1].s = cand[0].s;
+                            this.currentDelhiEvent = 4; this.delhiStateTimer = 0;
+                        }
+                    }
+
+                    if (this.currentDelhiEvent) {
+                        if ((this.currentDelhiEvent === 1 && this.delhiStateTimer > 2000) ||
+                            (this.currentDelhiEvent === 2 && this.delhiStateTimer > 4000) ||
+                            (this.currentDelhiEvent === 3 && this.delhiStateTimer > 5000) ||
+                            (this.currentDelhiEvent === 4 && this.delhiStateTimer > 4000)) {
+                            this.em.forEach(e => { if(e.t==='v') { e.chaosTag = null; e.s = e.baseSpeed; } });
+                            this.currentDelhiEvent = null; this.delhiChaosTimer = 0;
+                        }
+                    }
+                }
+
                 for(let i=this.em.length-1; i>=0; i--) {
                     let e = this.em[i];
                     if(e.t==='v') {
                         let el = this.lights.block - (e.logY % this.lights.block);
                         let targ = e.s; if(el > 0 && el < 100 && this.lights.state !== 'green') targ = 0;
                         e.logY += targ * (dt/16);
+
+                        if (e.chaosTag) {
+                            if (e.chaosTag === 'lane_cut') {
+                                e.x += (e.chaosTargetX > e.x ? 5 : -5) * (dt/16);
+                            } else if (e.chaosTag === 'stop_go') {
+                                let w = Math.sin(this.delhiStateTimer / 300);
+                                e.s = e.baseSpeed * (1 + (w * 0.7));
+                            } else if (e.chaosTag === 'block_wall') {
+                                if (this.delhiStateTimer > 2000) {
+                                    let shift = Math.sin((this.delhiStateTimer-2000)/500) > 0 ? 100 : 0;
+                                    e.x += ( (e.chaosBaseX + shift) - e.x ) * 0.1;
+                                } else { e.x += (e.chaosBaseX - e.x) * 0.1; }
+                            } else if (e.chaosTag === 'gap_front') {
+                                if (e.logY - p.logY < 180) e.s = e.baseSpeed * 0.2;
+                            } else if (e.chaosTag === 'gap_back') {
+                                if (e.logY - p.logY < 50) e.s = e.baseSpeed * 1.8;
+                            }
+                        }
                     } else if (e.t!=='h') { 
                         e.waitT -= dt; if (e.waitT <= -e.maxWait) e.waitT = Math.random() * 2000; 
                         if (e.waitT <= 0) { 
@@ -795,7 +904,9 @@
                             this.shakeTimer = 200;
                             this.slowMoTimer = 200;
                             const tArr = ["Close Call 🔥", "Saved It 😮‍💨", "That Was Tight 😬"];
-                            this.showCCText(tArr[Math.floor(Math.random()*tArr.length)]);
+                            let text = tArr[Math.floor(Math.random()*tArr.length)];
+                            if (this.currentDelhiEvent && e.chaosTag) text = "WHOA!! 😱";
+                            this.showCCText(text);
                         }
                     }
                 }
