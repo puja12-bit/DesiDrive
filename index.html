@@ -6,9 +6,9 @@
     <title>Indian Traffic Arcade Game - V8 (Gesture Edition)</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     
-    <!-- MediaPipe Hands & Camera Utils -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <!-- Hand Tracking SDKs -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
 
     <style>
@@ -34,16 +34,28 @@
         canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
         #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: flex; flex-direction: column; }
         
+        /* Hand HUD Styling */
+        #hand-overlay {
+            position: absolute; top: 10px; right: 10px; width: 220px; height: 165px;
+            border: 2px solid var(--text-primary); background: #000; z-index: 1000;
+            overflow: hidden; pointer-events: none; opacity: 0.8; box-shadow: 0 0 20px var(--text-primary);
+        }
+        #hand-canvas { width: 100%; height: 100%; transform: scaleX(-1); }
+
+        /* UX Fix: Scrolling Landing Page */
         .screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; flex-direction: column; align-items: center; background-color: rgba(0,0,0,0.95);
             pointer-events: auto; padding: 2rem; z-index: 50; overflow-y: auto; text-align: center;
         }
+        /* Custom scrollbar for landing page */
         .screen::-webkit-scrollbar { width: 10px; }
         .screen::-webkit-scrollbar-track { background: #111; }
         .screen::-webkit-scrollbar-thumb { background: var(--text-primary); border: 2px solid #111; }
+        
         .screen.hidden { display: none; }
         
+        /* Header typographies */
         h1 { font-size: 2.5rem; margin-top: 1rem; margin-bottom: 2rem; color: #ff0055; text-shadow: 0 0 15px #ff0055; line-height: 1.4; flex-shrink: 0;}
         h1.red { color: var(--text-danger); text-shadow: 0 0 20px var(--text-danger); }
         h1.green { color: var(--text-success); text-shadow: 0 0 20px var(--text-success); }
@@ -55,6 +67,7 @@
         .scroll-hint { font-size: 0.8rem; color: var(--text-success); animation: bounce 1.5s infinite; margin-top: 1rem; margin-bottom: 2rem; text-align: center; width:100% }
         @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(10px); } }
 
+        /* Document style block wrappers */
         .instruction-manual { width: 100%; max-width: 500px; text-align: left; border-left: 2px solid #333; padding-left: 1rem; margin-bottom: 2rem;}
 
         .garage-preview {
@@ -113,146 +126,185 @@
         .light-bulb.red.active { background: #ff0055; box-shadow: 0 0 20px #ff0055; }
         .light-bulb.yellow.active { background: #ffaa00; box-shadow: 0 0 20px #ffaa00; }
         .light-bulb.green.active { background: #00ff66; box-shadow: 0 0 20px #00ff66; }
-
-        /* Hand Tracking Overlay */
-        #hand-overlay {
-            position: absolute; top: 10px; right: 10px; width: 220px; height: 165px;
-            border: 3px solid var(--text-primary); background: #000; z-index: 1000;
-            overflow: hidden; pointer-events: none; opacity: 0.9; box-shadow: 0 0 20px var(--text-primary);
-        }
-        #output-canvas { width: 100%; height: 100%; transform: scaleX(-1); }
-        #hand-debug-text {
-            position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.8);
-            color: #0f0; font-size: 8px; font-family: monospace; padding: 4px; text-align: center;
-        }
     </style>
 </head>
 <body>
     <div id="game-container">
         <canvas id="game-canvas"></canvas>
         
-        <!-- Hand Tracker Overlay -->
+        <!-- Hand HUD for gesture feedback -->
         <div id="hand-overlay">
-            <video id="input-video" style="display:none;"></video>
-            <canvas id="output-canvas"></canvas>
-            <div id="hand-debug-text">CALIBRATING CAMERA...</div>
+            <canvas id="hand-canvas"></canvas>
+            <video id="hand-video" style="display:none" playsinline></video>
         </div>
 
         <div id="ui-layer">
+            
             <div id="garage-screen" class="screen">
                 <h1 style="margin-bottom:0.5rem">GARAGE</h1>
-                <div class="scroll-hint">↓ SCROLL FOR MANUAL & GESTURES ↓</div>
                 
+                <div class="scroll-hint">↓ SCROLL FOR MANUAL ↓</div>
+                
+                <!-- Explicit Instruction Block -->
                 <div class="instruction-manual">
-                    <h3 style="color:#00ff66">HAND GESTURES (SMOOTH V8)</h3>
-                    <p style="color:#fff">> [BOTH PALMS UP] ACCELERATE 👋👋<br>> [ANY FIST] BRAKE ✊<br>> [TILT HANDS] STEER / SWERVE 🎡<br>> [HOLD PEACE SIGN 0.3s] INDICATORS ✌️</p>
+                    <h3>GESTURE CONTROLS</h3>
+                    <p style="color:#00ffff">> 👋👋 BOTH PALMS: Accelerate<br>> ✊ FIST: Brake<br>> 🎡 TILT HANDS: Steer (Lift left hand to go left)<br>> ✌️ PEACE SIGN: Toggle Indicators</p>
                     
                     <h3>OBJECTIVES</h3>
-                    <p>> Do not idle! Fuel runs out constantly.<br>> Earn Fuel by making safe plays (Indicators, Red Lights).</p>
+                    <p>> Do not idle! Fuel runs out constantly. Earn Fuel by making strictly safe plays (Safe indicator turns, stopping at pure Reds).<br>> Score is shared to unlock Vehicles or new Maps!</p>
 
                     <h3>SYSTEM RULES</h3>
-                    <p style="color:#ffaa00">> 1. SOLID RED LINES: DO NOT shift lanes.<br>> 2. TRAFFIC LIGHTS: Obey signals.<br>> 3. 3-STRIKE LAW: Trigger 3 violations and it's GAME OVER.</p>
+                    <p style="color:#ffaa00">> 1. SOLID RED LINES: DO NOT shift lanes spanning 400 meters prior to any traffic light. Crossing a solid line nets a massive violation penalty!<br>> 2. TRAFFIC LIGHTS: Obey signals. Skipping a Red light acts as a major penalty strike. <br>> 3. THE 3-STRIKE LAW: Trigger 3 violations (Lanes or Signals) and your run is irreparably GAME OVER.<br>> 4. HAZARDS: DO NOT hit cattle or pedestrians representing explicit Game Over crashes!</p>
                 </div>
                 
                 <hr style="width: 80%; border-color:#333; margin: 1rem 0;">
+
                 <h2>PTS: <span id="global-score-ui">0</span></h2>
                 <div style="text-align:center; width:100%; margin-bottom:1rem;"><span id="next-unlock-info" style="color:#ff0055; font-size:0.7rem; text-shadow:0 0 5px #ff0055;"></span></div>
+                <p class="center-p">UNLOCK VEHICLE <span style="color:#fff">OR</span> MAP</p>
                 
-                <div class="garage-preview" id="garage-preview-container"><canvas id="garage-canvas"></canvas></div>
+                <div class="garage-preview" id="garage-preview-container">
+                    <canvas id="garage-canvas"></canvas>
+                </div>
+                
                 <p id="vehicle-name" style="color:#ffaa00; font-size: 1rem; text-shadow: 0 0 10px #ffaa00; text-align:center;"></p>
                 <p id="vehicle-stats" style="font-size:0.6rem; color:#aaa; text-align:center;"></p>
+                
                 <div class="btn-group" id="vehicle-list"></div>
                 
                 <hr style="width: 80%; border-color:#333; margin: 1rem 0;">
+                
                 <h2>MAP PROGRESSION</h2>
                 <div class="btn-group" id="map-list" style="flex-direction: column;"></div>
             </div>
 
             <div id="hud-screen" class="screen hidden">
                 <div class="hud-top">
-                    <div>PTS: <span id="score" style="color:#00ffff">0</span><br><br>SPD: <span id="speed">0</span></div>
-                    <div><span id="fuel-label">FUEL</span><div id="fuel-container"><div id="fuel-bar"></div></div><br>DIST: <span id="dist">0</span></div>
+                    <div>
+                        PTS: <span id="score" style="color:#00ffff">0</span><br><br>
+                        SPD: <span id="speed">0</span>
+                    </div>
+                    <div>
+                        <span id="fuel-label">FUEL</span>
+                        <div id="fuel-container"><div id="fuel-bar"></div></div>
+                        <br>DIST: <span id="dist">0</span>
+                    </div>
                 </div>
-                <div id="strike-ui"></div><div id="lane-strike-ui"></div>
+                <div id="strike-ui"></div>
+                <div id="lane-strike-ui"></div>
                 <div id="traffic-light-hud"><div id="tl-red" class="light-bulb red"></div><div id="tl-yellow" class="light-bulb yellow"></div><div id="tl-green" class="light-bulb green"></div></div>
                 <div class="hud-indicators">
-                    <div id="ind-left-box" class="ind-box"><div class="ind-arrow">&lt;</div><span id="lbl-ind-l">[Q] LEFT IND OFF</span></div>
-                    <div id="ind-right-box" class="ind-box"><div class="ind-arrow">&gt;</div><span id="lbl-ind-r">[E] RIGHT IND OFF</span></div>
+                    <div id="ind-left-box" class="ind-box">
+                        <div class="ind-arrow">&lt;</div>
+                        <span id="lbl-ind-l">LEFT IND OFF</span>
+                    </div>
+                    <div id="ind-right-box" class="ind-box">
+                        <div class="ind-arrow">&gt;</div>
+                        <span id="lbl-ind-r">RIGHT IND OFF</span>
+                    </div>
                 </div>
                 <div id="messages-area"></div>
             </div>
 
             <div id="game-over-screen" class="screen hidden" style="justify-content:center;">
-                <h1 id="game-over-title" class="red">WASTED!</h1>
-                <p id="game-over-reason" style="color:#ff0055; margin: 1rem 0; font-size: 0.8rem; text-align:center;"></p>
+                <h1 id="game-over-title" class="red" style="font-size: 1.6rem; line-height:1.4; text-shadow: 0 0 10px #ff0055; margin-bottom:0.5rem; text-align:center;">WASTED!</h1>
+                <p id="game-over-reason" style="color:#ff0055; margin: 1rem 0; font-size: 0.8rem; line-height:1.5; text-shadow:0 0 10px #ff0055; text-align:center;"></p>
+                
                 <div style="background:rgba(0,0,0,0.8); border:2px solid #555; padding:1.5rem; width:90%; max-width:400px; margin-bottom:1.5rem;">
-                    <p style="color:#00ffff; font-size:1rem; font-weight:bold;">SCORE: <span id="final-score">0</span></p>
+                    <p style="color:#00ffff; font-size:1rem; text-align:left; margin-bottom:15px; font-weight:bold;">SCORE: <span id="final-score">0</span></p>
                     <div id="smart-feedback-container" style="text-align:left; margin-top:15px;"></div>
                 </div>
+
                 <div class="btn-group">
                     <button id="btn-restart" style="min-width: 140px;">GARAGE</button>
-                    <button id="btn-try-again" style="min-width: 140px; color: #ff0055; border-color: #ff0055;">TRY AGAIN</button>
+                    <button id="btn-try-again" style="min-width: 140px; color: #ff0055; border-color: #ff0055; box-shadow: 0 0 15px rgba(255,0,85,0.4);">TRY AGAIN</button>
                 </div>
+            </div>
+            
+            <div id="level-complete-screen" class="screen hidden" style="justify-content:center;">
+                <h1 class="green" style="font-size: 1.5rem;">ARRIVED</h1>
+                <p class="center-p">PTS EARNED: <span id="win-score" style="color:#00ffff"></span></p>
+                <button id="btn-next" style="margin-top: 1rem;">RETURN</button>
             </div>
         </div>
     </div>
 
-    <!-- SCRIPT SECTION -->
     <script>
-        /** SMOOTH HAND CONTROLLER CLASS **/
+        // --- HAND TRACKING CONTROLLER ---
         class HandController {
             constructor() {
-                this.v = document.getElementById('input-video');
-                this.c = document.getElementById('output-canvas');
-                this.ctx = this.c.getContext('2d');
-                this.debug = document.getElementById('hand-debug-text');
-                this.state = { accel: false, brake: false, steering: 0, indL: false, indR: false };
-                this.timers = { l: 0, r: 0 }; this.init = false;
-                this.rawSteer = 0; // Filtered steering
+                this.video = document.getElementById('hand-video');
+                this.canvas = document.getElementById('hand-canvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.state = { accel: false, brake: false, steering: 0, indL: false, indRS: false };
+                this.lastIndTime = { l: 0, r: 0 };
+                this.hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+                this.hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.8, minTrackingConfidence: 0.8 });
+                this.hands.onResults(this.onResults.bind(this));
+                this.camera = new Camera(this.video, { onFrame: async () => { await this.hands.send({ image: this.video }); }, width: 640, height: 480 });
+                this.isActive = false;
             }
-            async start() {
-                if (this.init) return;
-                const h = new Hands({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
-                h.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.8, minTrackingConfidence: 0.8 });
-                h.onResults(this.onResults.bind(this));
-                const cam = new Camera(this.v, { onFrame: async () => { await h.send({ image: this.v }); }, width: 640, height: 480 });
-                cam.start(); this.init = true;
-            }
+
+            start() { if(!this.isActive) { this.camera.start(); this.isActive = true; } }
+
             onResults(res) {
-                this.ctx.save(); this.ctx.clearRect(0, 0, this.c.width, this.c.height);
-                this.ctx.drawImage(res.image, 0, 0, this.c.width, this.c.height);
+                this.ctx.save();
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.ctx.drawImage(res.image, 0, 0, this.canvas.width, this.canvas.height);
+                
                 let accelS = false, brakeS = false, steerS = 0, indLS = false, indRS = false;
+
                 if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
                     let palms = 0;
-                    let hSorted = [...res.multiHandLandmarks].sort((a,b) => a[0].x - b[0].x);
-                    if (hSorted.length === 2) {
-                        let tilt = hSorted[1][0].y - hSorted[0][0].y;
-                        steerS = tilt * 4.0;
-                    } else { steerS = (res.multiHandLandmarks[0][0].x - 0.5) * 2.5; }
+                    let handY = [];
 
-                    res.multiHandLandmarks.forEach((l) => {
-                        const isFist = l[8].y > l[6].y && l[12].y > l[10].y && l[16].y > l[14].y && l[20].y > l[18].y;
-                        const isPeace = l[8].y < l[6].y && l[12].y < l[10].y && l[16].y > l[14].y && l[20].y > l[18].y;
-                        const isPalm = l[8].y < l[6].y && l[12].y < l[10].y && l[16].y < l[14].y && l[20].y < l[18].y;
+                    res.multiHandLandmarks.forEach((marks, index) => {
+                        drawConnectors(this.ctx, marks, HAND_CONNECTIONS, {color: '#00ffff', lineWidth: 2});
+                        drawLandmarks(this.ctx, marks, {color: '#ff0055', lineWidth: 1, radius: 2});
+
+                        const isFist = marks[8].y > marks[6].y && marks[12].y > marks[10].y;
+                        const isPalm = marks[8].y < marks[6].y && marks[12].y < marks[10].y && marks[16].y < marks[14].y;
+                        const isPeace = marks[8].y < marks[6].y && marks[12].y < marks[10].y && marks[16].y > marks[14].y;
+
                         if (isFist) brakeS = true;
                         if (isPalm) palms++;
-                        if (isPeace) { if (l[0].x > 0.5) indLS = true; else indRS = true; }
-                        drawConnectors(this.ctx, l, HAND_CONNECTIONS, { color: '#00ffff', lineWidth: 2 });
-                        drawLandmarks(this.ctx, l, { color: '#ff0055', radius: 1 });
+                        
+                        handY.push(marks[9].y); // Use middle finger base for altitude (tilt)
+
+                        // Indicator toggle (Peace sign)
+                        let label = res.multiHandedness[index].label;
+                        if (isPeace) {
+                            let now = Date.now();
+                            if (label === 'Left' && now - this.lastIndTime.l > 300) { indLS = true; this.lastIndTime.l = now; }
+                            if (label === 'Right' && now - this.lastIndTime.r > 300) { indRS = true; this.lastIndTime.r = now; }
+                        }
                     });
-                    if (palms === 2 && res.multiHandLandmarks.length === 2) accelS = true;
+
+                    // Accel only on TWO palms
+                    if (palms >= 2) accelS = true;
+
+                    // Tilt Steering: Diff between left hand height and right hand height
+                    if (handY.length === 2) {
+                        // MediaPipe labels are mirrored. 'Left' handedness is physically user's right hand.
+                        let leftIdx = res.multiHandedness.findIndex(h => h.label === 'Right'); // Physical Left
+                        let rightIdx = res.multiHandedness.findIndex(h => h.label === 'Left'); // Physical Right
+                        if(leftIdx !== -1 && rightIdx !== -1) {
+                            let diff = handY[leftIdx] - handY[rightIdx]; // Positive = Left hand higher (steer left)
+                            steerS = Math.max(-1, Math.min(1, diff * 5)); 
+                        }
+                    }
                 }
-                const now = performance.now();
-                if (indLS) { if(!this.timers.lastL) this.timers.lastL = now; if(now-this.timers.lastL > 300) this.state.indL = true; } else { this.timers.lastL = null; this.state.indL = false; }
-                if (indRS) { if(!this.timers.lastR) this.timers.lastR = now; if(now-this.timers.lastR > 300) this.state.indR = true; } else { this.timers.lastR = null; this.state.indR = false; }
-                
-                this.state.accel = accelS; this.state.brake = brakeS; this.rawSteer = -steerS;
-                this.debug.innerText = `${accelS?'FIRE':''} ${brakeS?'STOP':''} STEER: ${steerS.toFixed(1)}`;
+
+                this.state.accel = accelS;
+                this.state.brake = brakeS;
+                this.state.steering = steerS;
+                if(indLS) window.dispatchEvent(new KeyboardEvent('keydown', {key: 'q'}));
+                if(indRS) window.dispatchEvent(new KeyboardEvent('keydown', {key: 'e'}));
                 this.ctx.restore();
             }
         }
 
-        /** ORIGINAL V8 ENGINE (LITERAL COPY) **/
+        // --- GAME ENGINE ---
         function gen(w, h, data, pal) {
             const c = document.createElement('canvas'); c.width=w; c.height=h; const x = c.getContext('2d');
             for(let y=0; y<h; y++) for(let k=0; k<w; k++) { let d=data[y*w+k]; if(d>0){x.fillStyle=pal[d]; x.fillRect(k,y,1,1);} }
@@ -260,162 +312,597 @@
         }
 
         const AudioSys = {
-            ctx: null, ambNode: null, init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); if (this.ctx.state === 'suspended') this.ctx.resume(); },
-            stopAmbulance() { if(this.ambNode) { this.ambNode.stop(); this.ambNode = null; } },
+            ctx: null,
+            ambNode: null,
+            init() {
+                if (!this.ctx) { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){} }
+                if (this.ctx && this.ctx.state === 'suspended') { try { this.ctx.resume(); } catch(e){} }
+            },
+            stopAmbulance() {
+                if(this.ambNode) { try { this.ambNode.stop(); } catch(e){} this.ambNode = null; }
+            },
             playCrash(type) {
-                this.init(); this.stopAmbulance(); let t = this.ctx.currentTime;
+                this.init(); this.stopAmbulance();
+                if(!this.ctx) return;
+                let t = this.ctx.currentTime;
                 if (type === 'vehicle') {
-                    let bufferSize = Math.floor(this.ctx.sampleRate * 0.4); let buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-                    let data = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-                    let noise = this.ctx.createBufferSource(); noise.buffer = buffer; let vF = this.ctx.createBiquadFilter(); vF.type = 'lowpass'; vF.frequency.value = 1000;
+                    let bufferSize = Math.floor(this.ctx.sampleRate * 0.4);
+                    let buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                    let data = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                    let noise = this.ctx.createBufferSource(); noise.buffer = buffer;
+                    let vF = this.ctx.createBiquadFilter(); vF.type = 'lowpass'; vF.frequency.value = 1000;
                     let gn = this.ctx.createGain(); gn.gain.setValueAtTime(0.5, t); gn.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
-                    noise.connect(vF); vF.connect(gn); gn.connect(this.ctx.destination); noise.start(t);
-                } else {
+                    noise.connect(vF); vF.connect(gn); gn.connect(this.ctx.destination);
+                    noise.start(t);
+                } else if (type === 'animal') {
                     let o = this.ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(100, t); o.frequency.exponentialRampToValueAtTime(30, t + 0.2);
                     let g = this.ctx.createGain(); g.gain.setValueAtTime(0.6, t); g.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
                     o.connect(g); g.connect(this.ctx.destination); o.start(t); o.stop(t+0.2);
+                    let o2 = this.ctx.createOscillator(); o2.type = 'triangle'; o2.frequency.setValueAtTime(150, t+0.05); o2.frequency.linearRampToValueAtTime(100, t+0.3);
+                    let g2 = this.ctx.createGain(); g2.gain.setValueAtTime(0, t); g2.gain.setValueAtTime(0.3, t+0.05); g2.gain.exponentialRampToValueAtTime(0.01, t+0.3);
+                    o2.connect(g2); g2.connect(this.ctx.destination); o2.start(t+0.05); o2.stop(t+0.3);
+                } else if (type === 'pedestrian') {
+                    let o = this.ctx.createOscillator(); o.type = 'sawtooth'; let vF = this.ctx.createBiquadFilter(); vF.type = 'lowpass'; vF.frequency.value = 800;
+                    o.frequency.setValueAtTime(300, t); o.frequency.linearRampToValueAtTime(200, t + 0.15);
+                    let g = this.ctx.createGain(); g.gain.setValueAtTime(0.3, t); g.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+                    o.connect(vF); vF.connect(g); g.connect(this.ctx.destination); o.start(t); o.stop(t+0.15);
                 }
                 setTimeout(() => this.playAmbulance(), 300);
             },
-            playAmbulance() { if(!this.ctx) return; let t = this.ctx.currentTime; let o = this.ctx.createOscillator(); o.type = 'square'; let g = this.ctx.createGain(); g.gain.setValueAtTime(0.05, t); g.gain.linearRampToValueAtTime(0.0, t + 3); for(let i=0; i<6; i++) { o.frequency.setValueAtTime(800, t + i*0.5); o.frequency.setValueAtTime(960, t + (i*0.5)+0.25); } o.connect(g); g.connect(this.ctx.destination); o.start(t); o.stop(t+3); this.ambNode = o; },
-            engineNode: null, stopEngine() { if (this.engineNode) { this.engineNode.stop(); this.engineNode = null; } },
-            playEngine(type) { this.init(); if (this.engineNode) return; let t = this.ctx.currentTime; let g = this.ctx.createGain(); g.gain.value = 0.15; g.connect(this.ctx.destination); this.engineNode = this.ctx.createOscillator(); this.engineNode.type = 'sawtooth'; this.engineNode.frequency.value = 120; this.engineNode.connect(g); this.engineNode.start(t); }
+            playAmbulance() {
+                if(!this.ctx) return;
+                let t = this.ctx.currentTime; let o = this.ctx.createOscillator(); o.type = 'square';
+                let g = this.ctx.createGain(); g.gain.setValueAtTime(0.05, t); g.gain.linearRampToValueAtTime(0.0, t + 3);
+                for(let i=0; i<6; i++) { o.frequency.setValueAtTime(800, t + i*0.5); o.frequency.setValueAtTime(960, t + (i*0.5)+0.25); }
+                let vF = this.ctx.createBiquadFilter(); vF.type='lowpass'; vF.frequency.value = 1500;
+                o.connect(vF); vF.connect(g); g.connect(this.ctx.destination);
+                o.start(t); o.stop(t+3); this.ambNode = o;
+            },
+            engineNode: null,
+            engineGain: null,
+            engineLFO: null,
+            engineType: null,
+            playEngine(type) {
+                this.init();
+                if (!this.ctx || this.ctx.state !== 'running') return;
+                if (this.engineType === type && this.engineNode) return; 
+                this.stopEngine();
+                this.engineType = type;
+                let t = this.ctx.currentTime;
+                this.engineGain = this.ctx.createGain();
+                this.engineGain.gain.value = 0.15;
+                this.engineGain.connect(this.ctx.destination);
+                this.engineNode = this.ctx.createOscillator();
+                if (type === 'thump') {
+                    this.engineNode.type = 'sawtooth'; this.engineNode.frequency.value = 75;
+                    this.engineLFO = this.ctx.createOscillator(); this.engineLFO.type = 'square'; this.engineLFO.frequency.value = 10;
+                    let lfoGain = this.ctx.createGain(); lfoGain.gain.value = 35;
+                    this.engineLFO.connect(lfoGain); lfoGain.connect(this.engineNode.frequency);
+                    this.engineLFO.start(t);
+                    let filter = this.ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 1000;
+                    this.engineNode.connect(filter); filter.connect(this.engineGain);
+                } else if (type === 'fast') {
+                    this.engineNode.type = 'sawtooth'; this.engineNode.frequency.value = 240;
+                    let filter = this.ctx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 1500;
+                    this.engineNode.connect(filter); filter.connect(this.engineGain);
+                } else if (type === 'smooth') {
+                    this.engineNode.type = 'square'; this.engineNode.frequency.value = 120;
+                    let filter = this.ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 600;
+                    this.engineNode.connect(filter); filter.connect(this.engineGain);
+                } else {
+                    this.engineNode.type = 'sawtooth'; this.engineNode.frequency.value = 120;
+                    let filter = this.ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 900;
+                    this.engineNode.connect(filter); filter.connect(this.engineGain);
+                }
+                this.engineNode.start(t);
+            },
+            stopEngine() {
+                if (this.engineNode) { try { this.engineNode.stop(); } catch(e){} this.engineNode = null; }
+                if (this.engineLFO) { try { this.engineLFO.stop(); } catch(e){} this.engineLFO = null; }
+                this.engineType = null;
+            }
         };
 
         const PALS = {
-            human: {1:'#fff', 2:'#ff0055', 3:'#00ffff', 4:'#222'}, cow: {1:'#fff', 2:'#111'}, buffalo: {1:'#333', 2:'#000'},
-            bike: {1:'#111', 2:'#ff0055', 3:'#fff', 4:'#444'}, auto: {1:'#111', 2:'#ffaa00', 3:'#222', 4:'#fff'},
-            shop: {1:'#ff0055', 2:'#222', 3:'#111', 4:'#00ffff', 5:'#fff'}, tree: {1:'#005511', 2:'#008822', 3:'#00ff44', 4:'#553311'}, house: {1:'#555', 2:'#222', 3:'#ffaa00', 4:'#111'}
+            human: {1:'#fff', 2:'#ff0055', 3:'#00ffff', 4:'#222'},
+            hazard: {1:'#ffaa00', 2:'#fff', 3:'#111'},
+            cow: {1:'#fff', 2:'#111'},
+            buffalo: {1:'#333', 2:'#000'},
+            bike: {1:'#111', 2:'#ff0055', 3:'#fff', 4:'#444'},
+            auto: {1:'#111', 2:'#ffaa00', 3:'#222', 4:'#fff'},
+            shop: {1:'#ff0055', 2:'#222', 3:'#111', 4:'#00ffff', 5:'#fff'},
+            tree: {1:'#005511', 2:'#008822', 3:'#00ff44', 4:'#553311'},
+            house: {1:'#555', 2:'#222', 3:'#ffaa00', 4:'#111'}
         };
+
         const dBike = [0,0,0,0,1,1,0,0,0,0, 0,0,0,1,1,1,1,0,0,0, 0,0,1,1,1,1,1,1,0,0, 0,0,1,2,3,3,2,1,0,0, 0,0,0,2,2,2,2,0,0,0, 0,0,0,2,2,2,2,0,0,0, 0,0,1,4,4,4,4,1,0,0, 0,1,1,4,4,4,4,1,1,0, 0,1,0,2,2,2,2,0,1,0, 0,0,0,2,2,2,2,0,0,0, 0,0,0,2,4,4,2,0,0,0, 0,0,0,2,2,2,2,0,0,0, 0,0,1,4,4,4,4,1,0,0, 0,1,1,4,4,4,4,1,1,0, 0,1,0,1,1,1,1,0,1,0, 0,0,0,0,1,1,0,0,0,0];
         const dAuto = [0,0,0,0,0,1,1,0,0,0,0,0, 0,0,0,1,1,1,1,0,0,0, 0,0,0,2,2,3,3,2,2,0, 0,0,2,3,3,4,4,3,3,2, 0,0,4,4,4,4,4,4,4,4, 1,2,3,3,3,3,3,3,3,3,2,1, 1,2,3,3,3,3,3,3,3,3,2,1, 1,2,1,1,1,1,1,1,1,1,2,1, 0,2,1,1,1,1,1,1,1,1,2,0, 0,2,1,1,1,1,1,1,1,1,2,0, 0,2,1,1,1,1,1,1,1,1,2,0, 1,2,2,2,2,2,2,2,2,2,2,1, 1,2,2,2,2,2,2,2,2,2,2,1, 0,0,0,0,0,0,0,0,0,0,0,0];
-        const dCow = [0,0,0,0,1,1,1,1,0,0,0,0, 0,0,1,2,1,1,1,1,2,1,0,0, 0,1,1,1,1,1,1,1,1,1,1,0, 0,1,1,1,1,1,1,1,1,1,1,0, 0,1,1,1,1,1,1,1,1,1,1,0, 0,1,1,1,1,2,2,1,1,1,1,0, 0,1,1,1,1,1,1,1,1,1,1,0, 0,1,1,1,1,1,1,1,1,1,1,0, 0,1,1,1,1,1,2,2,1,1,1,0, 0,1,1,1,1,1,1,1,1,1,1,0, 0,1,1,2,1,1,1,1,2,1,1,0, 0,0,0,2,0,0,0,0,2,0,0,0];
-        const dHum1 = [0,0,0,4,4,0,0,0, 0,0,4,1,1,4,0,0, 0,0,4,4,4,4,0,0, 0,4,3,3,3,3,4,0, 4,3,3,3,3,3,3,4, 4,4,3,3,3,3,4,4, 0,4,2,2,0,2,4,0, 0,0,4,4,0,0,0,0];
-        const dHum2 = [0,0,0,4,4,0,0,0, 0,0,4,1,1,4,0,0, 0,0,4,4,4,4,0,0, 0,4,3,3,3,3,4,0, 4,3,3,3,3,3,3,4, 4,4,3,3,3,3,4,4, 0,4,2,0,2,2,4,0, 0,0,0,0,4,4,0,0];
+        const dCow = [0,0,0,0,1,1,1,1,0,0,0,0,0,0,1,2,1,1,1,1,2,1,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,2,2,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,2,2,1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,0,0,1,1,2,1,1,1,1,2,1,1,0,0,0,0,2,0,0,0,0,2,0,0,0];
+        const dBuff = [0,0,0,2,0,0,0,0,0,0,2,0,0,0,0,0,0,0,2,2,1,1,1,1,1,1,2,2,0,0,0,0,0,2,1,1,1,1,1,1,1,1,1,1,2,0,0,0,0,1,1,1,1,2,2,2,2,1,1,1,1,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,2,0,0,0,0,0,0,2,0,0,0,0,0];
+        const dHum1 = [0,0,0,4,4,0,0,0,0,0,4,1,1,4,0,0,0,0,4,4,4,4,0,0,0,4,3,3,3,3,4,0,4,3,3,3,3,3,3,4,4,4,3,3,3,3,4,4,0,4,2,2,0,2,4,0,0,0,4,4,0,0,0,0];
+        const dHum2 = [0,0,0,4,4,0,0,0,0,0,4,1,1,4,0,0,0,0,4,4,4,4,0,0,0,4,3,3,3,3,4,0,4,3,3,3,3,3,3,4,4,4,3,3,3,3,4,4,0,4,2,0,2,2,4,0,0,0,0,0,4,4,0,0];
+
+        let dTree = new Array(400).fill(0); for(let y=0;y<20;y++) for(let x=0;x<20;x++){ let ds=Math.sqrt((x-10)**2+(y-10)**2); if(ds<3)dTree[y*20+x]=4;else if(ds<7)dTree[y*20+x]=(Math.random()>0.5?1:2);else if(ds<9&&Math.random()>0.3)dTree[y*20+x]=(Math.random()>0.5?2:3); }
+        let dShop = new Array(450).fill(0); for(let y=0;y<15;y++) for(let x=0;x<30;x++){ if(y<5)dShop[y*30+x]=1;else if(y>5&&x>10&&x<20)dShop[y*30+x]=3;else if(y>8&&(x<8||x>22))dShop[y*30+x]=4;else dShop[y*30+x]=2; }
+        let dHouse = new Array(600).fill(0); for(let y=0;y<20;y++) for(let x=0;x<30;x++){ if(y<8){if(x>y&&x<30-y)dHouse[y*30+x]=1;}else{if(y>12&&x>12&&x<18)dHouse[y*30+x]=4;else if(y>10&&y<15&&(x===5||x===25))dHouse[y*30+x]=3;else dHouse[y*30+x]=2;} }
         let dHole = new Array(400).fill(0); for(let y=0;y<20;y++) for(let x=0;x<20;x++){ let ds=Math.sqrt((x-10)**2+(y-10)**2); if(ds<7){dHole[y*20+x]=(ds>4.5)?1:2;} }
         let dBreak = new Array(600).fill(0); for(let y=0;y<10;y++) for(let x=0;x<60;x++){ if(y<2)dBreak[y*60+x]=4; else if(y>7)dBreak[y*60+x]=3; else dBreak[y*60+x]=((Math.floor(x/10))%2===0?1:2); }
 
+        function createBoxySprite(w,h,cb,cw,ct) {
+            let data = new Array(w*h).fill(0);
+            for(let y=0;y<h;y++) for(let x=0;x<w;x++) {
+                let tire = (y>2 && y<8) || (y>h-10 && y<h-4); let edge = (x<2 || x>w-3);
+                if(edge && tire) data[y*w+x]=1;
+                else if(!edge) { let win=(y>8&&y<14&&x>2&&x<w-3)||(y>h-16&&y<h-10&&x>2&&x<w-3)||(y>14&&y<h-16&&(x===3||x===w-4)); if(win)data[y*w+x]=3; else data[y*w+x]=2; }
+            }
+            return gen(w,h,data, {1:ct, 2:cb, 3:cw});
+        }
+
         const SPRITES = {
-            hum1: gen(8, 8, dHum1, PALS.human), hum2: gen(8, 8, dHum2, PALS.human), cow: gen(12, 12, dCow, PALS.cow), buffalo: gen(16, 16, dCow, PALS.buffalo),
-            bikeBlue: gen(10,16, dBike, {1:'#0055ff', 2:'#00aaff', 3:'#fff', 4:'#111'}), bikeBlack: gen(10,16, dBike, {1:'#222', 2:'#444', 3:'#fff', 4:'#000'}), bikeGreen: gen(10,16, dBike, {1:'#00ff00', 2:'#55ff55', 3:'#fff', 4:'#111'}),
-            bwm: gen(24, 40, dAuto, {1:'#111', 2:'#fff', 3:'#ccc', 4:'#111'}), bus: gen(30, 60, dAuto, {1:'#222', 2:'#00ff55', 3:'#fff', 4:'#111'}),
-            hole: gen(20, 20, dHole, {1:'#ff0033', 2:'#ffee00'}), breaker: gen(60, 10, dBreak, {1:'#ffee00', 2:'#000000', 3:'#0a0a0a', 4:'#ffffee'}), tree: gen(20,20, new Array(400).fill(1).map(()=>Math.floor(Math.random()*4)), PALS.tree)
+            hum1: gen(8, 8, dHum1, PALS.human), hum2: gen(8, 8, dHum2, PALS.human),
+            tree: gen(20, 20, dTree, PALS.tree), shop: gen(30, 15, dShop, PALS.shop), house: gen(30, 20, dHouse, PALS.house),
+            cow: gen(12, 12, dCow, PALS.cow), buffalo: gen(16, 16, dBuff, PALS.buffalo),
+            bike: gen(10,16, dBike, PALS.bike),
+            bikeBlue: gen(10,16, dBike, {1:'#0055ff', 2:'#00aaff', 3:'#fff', 4:'#111'}),
+            bikeBlack: gen(10,16, dBike, {1:'#222', 2:'#444', 3:'#fff', 4:'#000'}),
+            bikeGreen: gen(10,16, dBike, {1:'#00ff00', 2:'#55ff55', 3:'#fff', 4:'#111'}),
+            auto: gen(12,14, dAuto, PALS.auto),
+            bwm: createBoxySprite(20, 36, '#ffffff', '#111', '#222'),
+            bwmWhite: createBoxySprite(24, 40, '#ffffff', '#e0e0e0', '#222'),
+            bus: createBoxySprite(30, 60, '#00ff66', '#222', '#111'),
+            hole: gen(20, 20, dHole, {1:'#ff0033', 2:'#ffee00'}),
+            breaker: gen(60, 10, dBreak, {1:'#ffee00', 2:'#000000', 3:'#0a0a0a', 4:'#ffffee'})
         };
+
+        let GLOBAL_SCORE = localStorage.getItem('v8_score') ? parseInt(localStorage.getItem('v8_score')) : 0;
+        let MAP_UNLOCKS = localStorage.getItem('v8_maps') ? parseInt(localStorage.getItem('v8_maps')) : 0;
+        let UNLOCKED_VEHICLES = localStorage.getItem('v8_vehicles') ? JSON.parse(localStorage.getItem('v8_vehicles')) : ['hjonda'];
+        let HAS_UNLOCKED_THIS_SESSION = false;
 
         const VEHICLES = [
             { id: 'hjonda', tier: 'BIKE', name: 'HONDA SPLENDER', cost: 0, s: 12, a: 0.1, sp: SPRITES.bikeBlue, w:10, h:16, eSound: 'generic' },
             { id: 'bullett', tier: 'BIKE', name: 'BULLETT ENFIELD', cost: 500, s: 14, a: 0.08, sp: SPRITES.bikeBlack, w:10, h:18, eSound: 'thump' },
             { id: 'ninja', tier: 'BIKE', name: 'NINJA ZX', cost: 3000, s: 18, a: 0.2, sp: SPRITES.bikeGreen, w:10, h:16, eSound: 'fast' },
-            { id: 'bwm', tier: 'CAR', name: 'BWM M-SERIES', cost: 6000, s: 22, a: 0.25, sp: SPRITES.bwm, w:24, h:40, eSound: 'smooth' }
+            { id: 'bwm', tier: 'CAR', name: 'BWM M-SERIES', cost: 6000, s: 22, a: 0.25, sp: SPRITES.bwmWhite, w:24, h:40, eSound: 'smooth' }
         ];
 
         const MAPS = [
             { id: 'hyderabad', name: 'HYDERABAD BLOCKS', unlockCost: 0, levelReq: 0 },
+            { id: 'highway', name: 'NATIONAL HIGHWAY', unlockCost: 5000, levelReq: 1 },
+            { id: 'offroad', name: 'MP OFF-ROAD', unlockCost: 0, levelReq: 0 },
             { id: 'delhi', name: 'DELHI CHAOS', unlockCost: 0, levelReq: 0 },
-            { id: 'mumbai', name: 'MUMBAI RUSH', unlockCost: 0, levelReq: 0 }
+            { id: 'mumbai', name: 'MUMBAI RUSH', unlockCost: 0, levelReq: 0 },
+            { id: 'tamilnadu', name: 'TAMIL NADU FLOW', unlockCost: 0, levelReq: 0 }
         ];
 
-        let GLOBAL_SCORE = parseInt(localStorage.getItem('v8_score')) || 0;
-        let UNLOCKED_VEHICLES = JSON.parse(localStorage.getItem('v8_vehicles')) || ['hjonda'];
+        function saveProgress() {
+            localStorage.setItem('v8_score', GLOBAL_SCORE);
+            localStorage.setItem('v8_maps', MAP_UNLOCKS);
+            localStorage.setItem('v8_vehicles', JSON.stringify(UNLOCKED_VEHICLES));
+        }
 
         class GameEngine {
             constructor() {
                 this.c = document.getElementById('game-canvas'); this.ctx = this.c.getContext('2d');
                 this.c.width = 600; this.c.height = 800; this.ctx.imageSmoothingEnabled = false;
                 this.keys = {}; this.ind = { l:false, r:false };
+                
+                // Initialize Hand Tracking
                 this.hand = new HandController();
-                window.onkeydown = e => { this.keys[e.key] = true; if(e.key==='q'||e.key==='Q'){this.ind.l=!this.ind.l;this.ind.r=false;this.upUI();} if(e.key==='e'||e.key==='E'){this.ind.r=!this.ind.r;this.ind.l=false;this.upUI();} };
-                window.onkeyup = e => this.keys[e.key] = false;
-                this.isPlaying = false;
+
+                window.addEventListener('keydown', e => {
+                    this.keys[e.key] = true;
+                    if(e.key==='q' || e.key==='Q') { this.ind.l = !this.ind.l; this.ind.r = false; this.updateUIIndicators(); }
+                    if(e.key==='e' || e.key==='E') { this.ind.r = !this.ind.r; this.ind.l = false; this.updateUIIndicators(); }
+                });
+                window.addEventListener('keyup', e => { this.keys[e.key] = false; });
+                this.isPlaying = false; this.boundLoop = this.loop.bind(this);
             }
-            upUI() { 
-                document.getElementById('ind-left-box').className='ind-box'+(this.ind.l?' active':'');
-                document.getElementById('ind-right-box').className='ind-box'+(this.ind.r?' active':'');
-                document.getElementById('lbl-ind-l').innerText = this.ind.l?'[Q] LEFT ON':'[Q] LEFT OFF';
-                document.getElementById('lbl-ind-r').innerText = this.ind.r?'[E] RIGHT ON':'[E] RIGHT OFF';
+
+            updateUIIndicators() {
+                const bL = document.getElementById('ind-left-box'); const lblL = document.getElementById('lbl-ind-l');
+                const bR = document.getElementById('ind-right-box'); const lblR = document.getElementById('lbl-ind-r');
+                bL.className = 'ind-box' + (this.ind.l?' active':''); lblL.innerText = this.ind.l?'LEFT IND ON':'LEFT IND OFF';
+                bR.className = 'ind-box' + (this.ind.r?' active':''); lblR.innerText = this.ind.r?'RIGHT IND ON':'RIGHT IND OFF';
             }
-            msg(t, bad=false) {
-                const el = document.getElementById('messages-area'); const d = document.createElement('div'); d.className = 'floating-message' + (bad?' penalty':''); d.innerText = t;
-                el.appendChild(d); setTimeout(() => { if(el.contains(d)) el.removeChild(d); }, 2000);
-            }
-            addScore(pts, reason) { this.score += pts; if(pts>0 && reason) this.msg(`+${pts} ${reason}`); else if(pts<0 && reason) this.msg(`${pts} ${reason}`, true); }
+
+            resolveLane(x) { if (x < 233) return 0; if (x < 366) return 1; return 2; }
 
             startGame(vIdx, mapId) {
-                AudioSys.init(); this.vConf = VEHICLES[vIdx]; this.mapId = mapId; this.isPlaying = true; this.score = 0; this.fuel = 100;
+                if (typeof AudioSys !== 'undefined') AudioSys.init();
+                this.hand.start(); // Start camera
+                this.vConf = VEHICLES[vIdx]; this.mapId = mapId;
+                this.isPlaying = true; this.score = 0; this.fuel = 100;
                 this.p = { x: 300, y: 650, speed: 0, angle: 0, logY: 0, w: this.vConf.w, h: this.vConf.h, smoothedSteer: 0 };
-                this.em = []; this.env = []; this.lights = { state:'green', timer:5000, block:4000 };
-                this.lastTime = performance.now(); this.hand.start(); requestAnimationFrame(this.loop.bind(this));
+                this.p.lane = this.resolveLane(this.p.x);
+                this.em = []; this.spawnTimer = 0;
+                this.lights = { timer: 5000, state: 'green', block: 4000 };
+                this.env = []; this.envSpawnTimer = 0;
+                this.delhiChaosTimer = 0; this.delhiStateTimer = 0; this.currentDelhiEvent = null;
+                this.lastTime = performance.now();
+                this.strikes = 0; this.laneStrikes = 0; this.idleTime = 0;
+                this.missedPoints = 0; this.lastLaneRewardT = 0;
+                this.stats = { noSignalTurn: 0, suddenBrake: 0, unnecessaryStop: 0, nearMiss: 0 };
+                document.getElementById('strike-ui').innerText = '';
+                document.getElementById('lane-strike-ui').innerText = '';
+                this.updateUIIndicators();
+                requestAnimationFrame(this.boundLoop);
             }
-            stop(r) {
-                this.isPlaying = false; AudioSys.stopEngine(); GLOBAL_SCORE += Math.floor(this.score); localStorage.setItem('v8_score', GLOBAL_SCORE);
-                document.getElementById('hud-screen').classList.add('hidden'); document.getElementById('game-over-screen').classList.remove('hidden');
-                document.getElementById('game-over-reason').innerText = r; document.getElementById('final-score').innerText = Math.floor(this.score);
-                document.getElementById('smart-feedback-container').innerHTML = `<p>${r.includes('HIT')?'SAFETY VIOLATION!':'BETTER LUCK NEXT TIME!'}</p>`;
+
+            stop(reason) {
+                if (typeof AudioSys !== 'undefined') AudioSys.stopEngine();
+                this.isPlaying = false;
+                GLOBAL_SCORE += Math.floor(this.score); saveProgress();
+                HAS_UNLOCKED_THIS_SESSION = false;
+                
+                let isCrash = reason.includes("HIT") || reason.includes("FATAL") || reason.includes("ACCIDENT");
+                let trb = this.strikes + this.laneStrikes;
+                let messy = this.stats.suddenBrake > 2 && trb > 0;
+                
+                let title = "Traffic Police Is Watching 👀";
+                let displayReason = reason;
+
+                if (reason === "HIT PEDESTRIAN") {
+                    title = "License Suspended 🚫";
+                    displayReason = "Pedestrian hit – you are arrested 👮";
+                } else if (reason.includes("COW") || reason.includes("BUFFALO")) {
+                    title = "Gaadi Rok! 🐄";
+                    displayReason = "Owner se baat karo 😅 (negotiation pending)";
+                } else if (reason === "FATAL TRAFFIC CRASH") {
+                    let msgs = ["Bhagwan se milne ka plan tha kya? 😏", "Brake nahi, prarthana kar rahe the kya? 🙏", "Seedha upar jaane ka plan? 😬", "Brake late tha boss 😬", "Distance maintain karo 🚗"];
+                    title = msgs[Math.floor(Math.random() * msgs.length)];
+                    let subs = [ "Gaadi thok di boss 🚗💥", "Seedha takkar ho gayi 😬" ];
+                    displayReason = subs[Math.floor(Math.random() * subs.length)];
+                } else if (reason === "OUT OF FUEL") {
+                    title = "Gaadi Bandh! 🛑";
+                    displayReason = "Fuel khatam. Time management fail!";
+                }
+
+                let feedsHtml = "";
+                if (isCrash || reason === "OUT OF FUEL") {
+                    let crashFeed = reason === "HIT PEDESTRIAN" ? "Police are on the way. You are under arrest! 🚓" : (reason.includes("COW") ? "Locals are angry! 🐄😡" : "Insurance claim denied. 🚗💥");
+                    feedsHtml = `<p style="color:#cccccc; font-size:0.8rem; line-height:1.8; margin-bottom:15px; text-align:left;">• ${crashFeed}</p>`;
+                } else {
+                    let feeds = [];
+                    if (this.stats.nearMiss > 0) feeds.push(`<span style="color:#ffaa00">Close calls: ${this.stats.nearMiss} 🔥</span>`);
+                    if (this.stats.noSignalTurn > 0) feeds.push(`<span style="color:#ff3333">Indicator avoid kiya</span>`);
+                    feedsHtml = feeds.map(f => `<p style="color:#cccccc; font-size:0.8rem; line-height:1.8; margin-bottom:15px; text-align:left;">• ${f}</p>`).join('');
+                }
+
+                document.getElementById('hud-screen').classList.add('hidden');
+                document.getElementById('game-over-screen').classList.remove('hidden');
+                document.getElementById('game-over-title').innerText = title;
+                document.getElementById('game-over-reason').innerText = displayReason;
+                document.getElementById('final-score').innerText = Math.floor(this.score);
+                document.getElementById('smart-feedback-container').innerHTML = feedsHtml;
             }
+
+            msg(t, bad=false) {
+                const el = document.getElementById('messages-area');
+                const d = document.createElement('div'); d.className = 'floating-message' + (bad?' penalty':''); d.innerText = t;
+                el.appendChild(d); setTimeout(() => { if(el.contains(d)) el.removeChild(d); }, 2000);
+            }
+
+            showCCText(t) {
+                const el = document.getElementById('messages-area');
+                const d = document.createElement('div'); d.className = 'floating-message'; 
+                d.style.color = '#ffaa00'; d.style.fontSize = '1.2rem'; d.style.textShadow = '0 0 10px #ffaa00';
+                d.innerText = t; el.appendChild(d); setTimeout(() => { if(el.contains(d)) el.removeChild(d); }, 800);
+            }
+
+            addScore(pts, reason) {
+                if (reason === "NEAR MISS") this.stats.nearMiss++;
+                this.score += pts;
+                if(pts > 0) { this.fuel = Math.min(100, this.fuel + 5); if(reason) this.msg(`+${pts} ${reason}`); }
+                else { if(reason) this.msg(`${pts} ${reason}`, true); }
+            }
+            
+            checkIdling(dt, distToLight) {
+                if (this.p.speed === 0) {
+                    let hasBlock = false;
+                    for (let e of this.em) { if (e.logY > this.p.logY && e.logY < this.p.logY + 150 && Math.abs(e.x - this.p.x) < 40) hasBlock = true; }
+                    if (!hasBlock && (distToLight > 250 || this.lights.state === 'green')) {
+                        this.idleTime += dt; if(this.idleTime > 3000) { this.addScore(-5, "UNNECESSARY STOP"); this.idleTime = 0; }
+                    } else { this.idleTime = 0; }
+                } else { this.idleTime = 0; }
+            }
+
+            triggerLaneViolationFlash() {
+                const doc = document.getElementById('game-container');
+                doc.classList.add('flash-violation'); this.laneStrikes++;
+                if (this.laneStrikes === 1) { this.addScore(-20, "LANE VIOLATION 1/3"); document.getElementById('lane-strike-ui').innerText = 'LANE VIOLATION: 1/3 WARNING';}
+                else if (this.laneStrikes === 2) { this.addScore(-50, "LANE VIOLATION 2/3"); document.getElementById('lane-strike-ui').innerText = 'LANE VIOLATION: 2/3 FINAL WARNING'; }
+                else if (this.laneStrikes >= 3) { return this.stop("EXCEEDED LANE VIOLATIONS"); }
+                setTimeout(() => { doc.classList.remove('flash-violation'); }, 300);
+            }
+
             update(dt) {
                 this.fuel -= (dt/1000) * 1.5; if(this.fuel <= 0) return this.stop("OUT OF FUEL");
-                const gst = this.hand.state;
-                if (gst.indL && !this.lHIndL) { this.ind.l = !this.ind.l; this.ind.r = false; this.upUI(); }
-                if (gst.indR && !this.lHIndR) { this.ind.r = !this.ind.r; this.ind.l = false; this.upUI(); }
-                this.lHIndL = gst.indL; this.lHIndR = gst.indR;
 
-                let brake = this.keys.ArrowDown || gst.brake;
-                let accel = this.keys.ArrowUp || gst.accel;
-                this.p.smoothedSteer += (this.hand.rawSteer - this.p.smoothedSteer) * 0.25;
-                let st = this.keys.ArrowLeft ? -1 : (this.keys.ArrowRight ? 1 : this.p.smoothedSteer);
+                let p = this.p;
+                if (p.speed > 0.5) AudioSys.playEngine(this.vConf.eSound || 'generic');
+                else AudioSys.stopEngine();
 
-                if(accel) this.p.speed += this.vConf.a; else if(brake) this.p.speed -= 0.6; else this.p.speed -= 0.05;
-                if(this.p.speed < 0) this.p.speed = 0; 
-                let maxS = this.mapId === 'mumbai' ? this.vConf.s*1.3 : this.vConf.s;
-                if(this.p.speed > maxS) this.p.speed = maxS;
+                if (p.speed > 3) this.addScore(p.speed * (dt/1000) * 0.4, null);
+                
+                // INTEGRATE GESTURES
+                let brake = this.keys.ArrowDown || this.hand.state.brake; 
+                let accel = this.keys.ArrowUp || this.hand.state.accel;
+                
+                if(accel) p.speed += this.vConf.a;
+                else if(brake) p.speed -= 0.6; else p.speed -= 0.05;
+                if(p.speed < 0) p.speed = 0; 
+                let maxS = this.mapId === 'mumbai' ? this.vConf.s * 1.3 : this.vConf.s;
+                if(p.speed > maxS) p.speed = maxS;
+                
+                p.logY += p.speed * (dt/16);
+                const distToLight = this.lights.block - (p.logY % this.lights.block);
 
-                if (this.p.speed > 0.5) AudioSys.playEngine(); else AudioSys.stopEngine();
+                if (brake && p.speed > 5 && !this.bf) { this.bf = true; if(!this.ind.l && !this.ind.r) this.addScore(-10, "SUDDEN BRAKE"); }
+                if (!brake) this.bf = false;
 
-                this.p.logY += this.p.speed * (dt/16);
-                if(this.p.speed > 0) { this.p.x += st * (this.vConf.s * 0.22); this.p.angle = st * 0.12; }
-                if(this.p.x < 150) this.p.x=150; if(this.p.x > 450) this.p.x=450;
+                // Smooth Steering Integration
+                let targetSteer = 0;
+                if(this.keys.ArrowLeft) targetSteer = -1;
+                else if(this.keys.ArrowRight) targetSteer = 1;
+                else targetSteer = this.hand.state.steering;
 
-                // Spawning Logic Parity with V2
-                if(Math.random()<0.02) {
-                    let type = Math.random()>0.8?'h':'v';
-                    this.em.push({ logY: this.p.logY+800, x: 150+Math.random()*300, s: 4+Math.random()*4, t:type, sp: type==='v'?SPRITES.bwm:SPRITES.hole, w:20, h:30 });
+                p.smoothedSteer += (targetSteer - p.smoothedSteer) * 0.15;
+                let st = p.smoothedSteer;
+
+                if (p.speed > 0) {
+                    p.x += st * (this.vConf.s * 0.2); p.angle = st * 0.1;
+
+                    let currentLane = this.resolveLane(p.x);
+                    if (currentLane !== p.lane) {
+                        p.lane = currentLane;
+                        if(distToLight > 0 && distToLight < 400) this.triggerLaneViolationFlash();
+                        else {
+                            if (st !== 0 && !this.sf) {
+                                this.sf = true;
+                                if((st < -0.3 && this.ind.l) || (st > 0.3 && this.ind.r)) {
+                                    let now = performance.now();
+                                    if (now - this.lastLaneRewardT > 500) {
+                                        let risk = this.em.some(e => Math.abs(e.logY - p.logY) < 300 && Math.abs(e.x - p.x) < 150);
+                                        if (risk) { this.addScore(10, "SAFE LANE CHG"); this.lastLaneRewardT = now; }
+                                    }
+                                } else this.addScore(-5, "NO SIGNAL TURN");
+                            }
+                        }
+                    }
                 }
-                if(Math.random()<0.05) this.env.push({ logY: this.p.logY+800, x: Math.random()*100, sp: SPRITES.tree, w:20, h:20 });
+                if (Math.abs(st) < 0.1) this.sf = false;
+                if(p.x < 150) p.x=150; if(p.x > 450) p.x=450;
+
+                this.lights.timer -= dt;
+                if(this.lights.timer <= 0) {
+                    let s = this.lights.state;
+                    if(s==='green') {this.lights.state='yellow'; this.lights.timer=2000;}
+                    else if(s==='yellow') {this.lights.state='red'; this.lights.timer=6000;}
+                    else {this.lights.state='green'; this.lights.timer=8000;}
+                }
+                
+                this.checkIdling(dt, distToLight);
+
+                let tlH = document.getElementById('traffic-light-hud');
+                if(distToLight < 300) {
+                    tlH.classList.add('visible');
+                    document.getElementById('tl-red').className = 'light-bulb red' + (this.lights.state==='red'?' active':'');
+                    document.getElementById('tl-yellow').className = 'light-bulb yellow' + (this.lights.state==='yellow'?' active':'');
+                    document.getElementById('tl-green').className = 'light-bulb green' + (this.lights.state==='green'?' active':'');
+                } else tlH.classList.remove('visible');
+
+                if (distToLight < 20 && p.speed > 2 && this.lights.state === 'red') { 
+                    if(!this.rp) {
+                        this.strikes++;
+                        if (this.strikes === 1) { this.addScore(-20, "SIGNAL VIOLATION 1/3"); document.getElementById('strike-ui').innerText = 'VIOLATION: 1/3 WARNING';}
+                        else if (this.strikes === 2) { this.addScore(-50, "SIGNAL VIOLATION 2/3"); document.getElementById('strike-ui').innerText = 'VIOLATION: 2/3 FINAL WARNING'; }
+                        else if (this.strikes >= 3) return this.stop("EXCEEDED SIGNAL VIOLATIONS");
+                        this.rp = true; 
+                    } 
+                }
+                if (distToLight > 200) { this.rp = false; this.gs = false; }
+                if (distToLight < 150 && distToLight > 20 && p.speed === 0 && this.lights.state === 'red' && !this.gs) { this.addScore(10, "SAFE STOP"); this.gs = true; }
+
+                this.envSpawnTimer += dt;
+                if (this.envSpawnTimer > 200) {
+                    this.envSpawnTimer = 0;
+                    if(Math.random() < 0.6) {
+                        let isLeft = Math.random() > 0.5; let r = Math.random();
+                        let sp = SPRITES.tree; let w=40; let h=40;
+                        if (r < 0.3) { sp = SPRITES.shop; w=60; h=30; } else if (r < 0.6) { sp = SPRITES.house; w=60; h=40; }
+                        this.env.push({ logY: p.logY + 800, x: isLeft ? Math.random()*80 : 520 + Math.random()*80, sp: sp, w: w, h: h });
+                    }
+                }
+                for(let i=this.env.length-1; i>=0; i--) { if(this.env[i].logY < p.logY - 200) this.env.splice(i,1); }
+
+                this.spawnTimer += dt;
+                let sDelay = this.mapId === 'mumbai' ? 200 : (this.mapId === 'tamilnadu' ? 600 : 400); 
+                if(this.spawnTimer > sDelay && this.em.length < 30 && distToLight > 200) {
+                    this.spawnTimer = 0; let r = Math.random();
+                    if (this.mapId === 'tamilnadu') r = Math.random() * 0.7; 
+                    
+                    let sDist = this.mapId === 'mumbai' ? 500 : 700;
+                    let e = { logY: p.logY + sDist + Math.random()*200, x: 150 + Math.random()*250, waitT: 0, maxWait: Math.random()*3000 };
+                    
+                    if (this.mapId === 'offroad' && r > 0.85) {
+                        if (Math.random() > 0.5) { e.t = 'hole'; e.sp = SPRITES.hole; e.w = 20; e.h = 20; e.s = 0; e.sx = 0; }
+                        else { e.t = 'breaker'; e.sp = SPRITES.breaker; e.w = 60; e.h = 10; e.s = 0; e.sx = 0; e.x = 200 + Math.floor(Math.random()*3)*100; }
+                    } else {
+                        if(r < 0.7 || this.mapId === 'mumbai') { 
+                            e.t = 'v'; e.s = 3 + Math.random()*6; if (this.mapId === 'mumbai') e.s *= 1.3; if (this.mapId === 'tamilnadu') e.s = 6; 
+                            if (this.mapId === 'mumbai' && Math.random() < 0.4) { e.w = 30; e.h = 60; e.sp = SPRITES.bus; e.s = 2; }
+                            else {
+                                let vR = Math.random();
+                                if(vR<0.2) { e.w=10; e.h=16; e.sp=SPRITES.bike; } else if(vR<0.4) { e.w=12; e.h=14; e.sp=SPRITES.auto; }
+                                else if(vR<0.7) { e.w=20; e.h=36; e.sp=SPRITES.bwm; } else { e.w=30; e.h=60; e.sp=SPRITES.bus; e.s=2; }
+                            }
+                            e.baseSpeed = e.s; e.chaosTag = null;
+                        } else if (r < 0.85) { 
+                            e.t = 'p'; e.sp1 = SPRITES.hum1; e.sp2 = SPRITES.hum2; e.w=8; e.h=8; e.sx = (Math.random()>0.5?1:-1) * 2; e.x = e.sx>0?100:500; e.animT = 0;
+                        } else if (r < 0.95) { e.t = 'cow'; e.sp = SPRITES.cow; e.w=12; e.h=12; e.sx = (Math.random()>0.5?1:-1) * 0.2; e.x = e.sx>0?150:450; }
+                        else { e.t = 'buf'; e.sp = SPRITES.buffalo; e.w=16; e.h=16; e.sx = (Math.random()>0.5?1:-1) * 0.1; e.x = e.sx>0?150:450; e.maxWait = 6000; }
+                    }
+                    this.em.push(e);
+                }
+
+                if (this.mapId === 'delhi') {
+                    this.delhiChaosTimer += dt;
+                    if (this.currentDelhiEvent) this.delhiStateTimer += dt;
+                    if (!this.currentDelhiEvent && this.delhiChaosTimer > 2500 + Math.random()*1500) {
+                        this.delhiChaosTimer = 0; let activeEvt = [1, 2, 3, 4][Math.floor(Math.random() * 4)];
+                        let fwd = this.em.filter(e => e.t === 'v' && e.logY > p.logY + 150);
+                        if (activeEvt === 1 && fwd.length > 0) {
+                            let c = fwd.find(e => e.sp === SPRITES.bike || e.sp === SPRITES.auto);
+                            if (c) { c.chaosTag = 'lane_cut'; c.chaosTargetX = p.x; this.currentDelhiEvent = 1; this.delhiStateTimer = 0; }
+                        } else if (activeEvt === 2 && fwd.length > 0) { this.currentDelhiEvent = 2; this.delhiStateTimer = 0; fwd.forEach(e => e.chaosTag = 'stop_go'); }
+                    }
+                    if (this.currentDelhiEvent && this.delhiStateTimer > 4000) { this.em.forEach(e => { if(e.t==='v') { e.chaosTag = null; e.s = e.baseSpeed; } }); this.currentDelhiEvent = null; }
+                }
 
                 for(let i=this.em.length-1; i>=0; i--) {
-                    let e = this.em[i]; e.logY += e.s;
-                    if(e.logY < this.p.logY-200) this.em.splice(i,1);
-                    else if(Math.abs(e.logY-this.p.logY)<40 && Math.abs(e.x-this.p.x)<30) return this.stop("ACCIDENT!");
+                    let e = this.em[i];
+                    if(e.t==='v') {
+                        let el = this.lights.block - (e.logY % this.lights.block);
+                        let targ = e.s; if(el > 0 && el < 100 && this.lights.state !== 'green') targ = 0;
+                        e.logY += targ * (dt/16);
+                        if (e.chaosTag === 'lane_cut') e.x += (e.chaosTargetX > e.x ? 5 : -5) * (dt/16);
+                        else if (e.chaosTag === 'stop_go') e.s = e.baseSpeed * (1 + (Math.sin(this.delhiStateTimer / 300) * 0.7));
+                    } else if (e.t!=='h') { e.waitT -= dt; if (e.waitT <= -e.maxWait) e.waitT = Math.random() * 2000; if (e.waitT <= 0) { e.x += e.sx * (dt/16); if(e.t==='p') e.animT += dt; } }
+                    if(e.logY < p.logY - 200 || e.x < -100 || e.x > 700) this.em.splice(i,1);
                 }
 
-                document.getElementById('score').innerText = Math.floor(this.score += this.p.speed*0.01);
-                document.getElementById('speed').innerText = Math.floor(this.p.speed*10);
-                document.getElementById('dist').innerText = Math.floor(this.p.logY);
-                document.getElementById('fuel-bar').style.width = this.fuel + '%';
+                let pw = p.w*0.8, ph = p.h*0.8, pr = { l: p.x - pw/2, r: p.x + pw/2, t: p.y - ph/2, b: p.y + ph/2 };
+                let npr = { l: pr.l - 25, r: pr.r + 25, t: pr.t - 30, b: pr.b + 30 };
+                let crashReason = null;
+                for(let e of this.em) {
+                    let sy = 650 - (e.logY - p.logY);
+                    let rw = e.t==='v'? (e.w*2)*0.8 : (e.t==='p'? e.w*2 : e.w*2.5)*0.8; 
+                    let rh = e.t==='v'? (e.h*2)*0.8 : (e.t==='p'? e.h*2 : e.h*2.5)*0.8;
+                    let er = { l: e.x - rw/2, r: e.x + rw/2, t: sy - rh/2, b: sy + rh/2 };
+                    if(!(er.l > pr.r || er.r < pr.l || er.t > pr.b || er.b < pr.t)) {
+                        if (e.t === 'hole' && !e.hit) { e.hit = true; p.speed *= 0.5; this.addScore(-10, "POTHOLE HIT"); }
+                        else if (e.t === 'breaker' && !e.hit) { e.hit = true; if (p.speed > 8) { p.speed *= 0.3; this.addScore(-15, "TOOK BREAKER TOO FAST"); } }
+                        else if (e.t !== 'hole' && e.t !== 'breaker') {
+                            if(e.t === 'cow') { crashReason = "HIT A COW - INSTANT JAIL"; AudioSys.playCrash('animal'); }
+                            else if(e.t === 'buf') { crashReason = "HIT A BUFFALO - TOTALED"; AudioSys.playCrash('animal'); }
+                            else if(e.t === 'p') { crashReason = "HIT PEDESTRIAN"; AudioSys.playCrash('pedestrian'); }
+                            else { crashReason = "FATAL TRAFFIC CRASH"; AudioSys.playCrash('vehicle'); }
+                            break;
+                        }
+                    } else if (!(er.l > npr.r || er.r < npr.l || er.t > npr.b || er.b < npr.t)) {
+                        if (!e.nmAwarded && p.speed > 5 && (e.t === 'v' || e.t === 'p' || e.t === 'buf' || e.t === 'cow')) {
+                            e.nmAwarded = true; this.addScore(5, "NEAR MISS"); this.showCCText("Close Call 🔥");
+                        }
+                    }
+                }
+                if (crashReason) return this.stop(crashReason);
+
+                document.getElementById('score').innerText = Math.floor(this.score); document.getElementById('speed').innerText = Math.floor(p.speed*10);
+                document.getElementById('dist').innerText = Math.floor(p.logY); document.getElementById('fuel-bar').style.width = this.fuel + '%';
             }
+
             draw() {
                 this.ctx.fillStyle = '#050505'; this.ctx.fillRect(0,0,600,800);
                 this.ctx.fillStyle = '#111'; this.ctx.fillRect(100,0,400,800);
-                // Background & Road Features
-                for(let y=-100; y<900; y+=40) { let dy = y+(this.p.logY%40); this.ctx.fillStyle='rgba(255,255,255,0.2)'; this.ctx.fillRect(233,dy,4,20); this.ctx.fillRect(366,dy,4,20); }
-                this.env.forEach(e => { let sy = 650-(e.logY-this.p.logY); this.ctx.drawImage(e.sp, e.x-10, sy-10, 20, 20); });
-                this.em.forEach(e => { let sy = 650-(e.logY-this.p.logY); this.ctx.drawImage(e.sp, e.x-15, sy-20, 30, 40); });
-                this.ctx.save(); this.ctx.translate(this.p.x, this.p.y); this.ctx.rotate(this.p.angle); this.ctx.shadowColor='#00ffff'; this.ctx.shadowBlur=15; this.ctx.drawImage(this.vConf.sp, -this.vConf.w, -this.vConf.h, this.vConf.w*2, this.vConf.h*2); this.ctx.restore();
+                
+                let off = this.p.logY % this.lights.block;
+                const distToLight = this.lights.block - off;
+                let isSolid = distToLight < 400 && distToLight > 0;
+                
+                this.ctx.fillStyle = isSolid ? '#ff0055' : 'rgba(255,255,255,0.2)';
+                for (let yy = -100; yy < 900; yy += 40) {
+                    let drawY = yy + (this.p.logY % 40);
+                    if (isSolid) { this.ctx.fillRect(233, -100, 4, 1000); this.ctx.fillRect(366, -100, 4, 1000); break; }
+                    else { this.ctx.fillRect(233, drawY, 2, 20); this.ctx.fillRect(366, drawY, 2, 20); }
+                }
+
+                for(let e of this.env) {
+                    let sy = 650 - (e.logY - this.p.logY);
+                    this.ctx.drawImage(e.sp, e.x - e.w/2, sy - e.h/2, e.w, e.h);
+                }
+
+                let sY = 650 - distToLight;
+                if(sY > -100 && sY < 900) {
+                    this.ctx.fillStyle = '#1a1a1a'; this.ctx.fillRect(0, sY - 50, 600, 100);
+                    let c = '#ff0055'; if(this.lights.state==='green') c='#00ff66'; if(this.lights.state==='yellow') c='#ffaa00';
+                    this.ctx.fillStyle = c; this.ctx.fillRect(80, sY+60, 15,30); this.ctx.fillRect(505, sY+60, 15,30);
+                }
+
+                for(let e of this.em) {
+                    let sy = 650 - (e.logY - this.p.logY);
+                    if (e.t === 'hole' || e.t === 'breaker' || e.t === 'v') this.ctx.drawImage(e.sp, e.x - e.w, sy - e.h, e.w*2, e.h*2); 
+                    else if (e.t === 'cow' || e.t === 'buf') this.ctx.drawImage(e.sp, e.x - (e.w*2.5)/2, sy - (e.h*2.5)/2, e.w*2.5, e.h*2.5);
+                    else if (e.t === 'p') this.ctx.drawImage((e.animT % 500 < 250) ? e.sp1 : e.sp2, e.x - e.w, sy - e.h, e.w*2, e.h*2);
+                }
+
+                this.ctx.save();
+                this.ctx.translate(this.p.x, this.p.y); this.ctx.rotate(this.p.angle);
+                this.ctx.shadowColor = '#00ffff'; this.ctx.shadowBlur = 15;
+                this.ctx.drawImage(this.vConf.sp, -this.vConf.w, -this.vConf.h, this.vConf.w*2, this.vConf.h*2);
+                this.ctx.restore();
+                this.ctx.shadowBlur = 0;
             }
-            loop(t) { if(!this.isPlaying) return; let dt=t-this.lastTime; this.lastTime=t; if(dt>100)dt=16; this.update(dt); this.draw(); requestAnimationFrame(this.loop.bind(this)); }
+
+            loop(t) {
+                if(!this.isPlaying) return;
+                let dt = t - this.lastTime; this.lastTime = t; if(dt>100)dt=16;
+                this.update(dt); this.draw(); requestAnimationFrame(this.boundLoop);
+            }
         }
 
-        const g = new GameEngine();
-        function rUI() {
-            document.getElementById('global-score-ui').innerText = GLOBAL_SCORE; const vl = document.getElementById('vehicle-list'); vl.innerHTML='';
-            VEHICLES.forEach((v,i) => { const b = document.createElement('button'); b.innerText = `SELECT ${v.name}`; b.onclick = () => sel(i); vl.appendChild(b); });
-            const ml = document.getElementById('map-list'); ml.innerHTML = '';
-            MAPS.forEach(m => { const b = document.createElement('button'); b.innerText = `PLAY ${m.name}`; b.onclick = () => { g.startGame(currV, m.id); document.getElementById('garage-screen').classList.add('hidden'); document.getElementById('hud-screen').classList.remove('hidden'); }; ml.appendChild(b); });
-            sel(0);
-        }
-        function sel(i) { currV = i; let v = VEHICLES[i]; document.getElementById('vehicle-name').innerText=`[${v.tier}] ${v.name}`; const c = document.getElementById('garage-canvas'); const xc = c.getContext('2d'); xc.clearRect(0,0,200,150); xc.drawImage(v.sp, 100-v.w*4, 75-v.h*4, v.w*8, v.h*8); }
         let currV = 0;
-        document.addEventListener('DOMContentLoaded', () => { document.getElementById('btn-restart').onclick = () => location.reload(); document.getElementById('btn-try-again').onclick = () => { document.getElementById('game-over-screen').classList.add('hidden'); document.getElementById('hud-screen').classList.remove('hidden'); g.startGame(currV, 'hyderabad'); }; rUI(); });
+        let currMapId = MAPS[0].id;
+        document.addEventListener('DOMContentLoaded', () => {
+            const g = new GameEngine();
+            const gui = { garage: document.getElementById('garage-screen'), ov: document.getElementById('game-over-screen') };
+
+            function rUI() {
+                document.getElementById('global-score-ui').innerText = GLOBAL_SCORE;
+                let nextCost = 999999;
+                const vl = document.getElementById('vehicle-list'); vl.innerHTML='';
+                VEHICLES.forEach((v,i) => {
+                    const b = document.createElement('button');
+                    let u = UNLOCKED_VEHICLES.includes(v.id) || v.cost === 0;
+                    if(!u && v.cost < nextCost) nextCost = v.cost;
+                    b.innerText = u ? `SELECT ${v.name}` : `BUY ${v.name}\n${v.cost}PTS`;
+                    if(!u && GLOBAL_SCORE >= v.cost) {
+                        b.onclick = () => { if(HAS_UNLOCKED_THIS_SESSION) return; GLOBAL_SCORE-=v.cost; UNLOCKED_VEHICLES.push(v.id); HAS_UNLOCKED_THIS_SESSION=true; saveProgress(); rUI(); };
+                        b.style.borderColor='#ffaa00'; b.style.color='#ffaa00';
+                        if(HAS_UNLOCKED_THIS_SESSION) b.disabled = true;
+                    } else if (!u) { b.disabled = true; }
+                    else b.onclick = () => { currV = i; sel(i); };
+                    vl.appendChild(b);
+                });
+                
+                const ml = document.getElementById('map-list'); ml.innerHTML='';
+                MAPS.forEach((m,i) => {
+                    const mb = document.createElement('button');
+                    let mu = MAP_UNLOCKS >= m.levelReq;
+                    mb.innerText = mu ? `PLAY ${m.name}` : `UNLOCK ${m.name}\n${m.unlockCost}PTS`;
+                    if(!mu && GLOBAL_SCORE >= m.unlockCost) {
+                        mb.onclick = () => { if(HAS_UNLOCKED_THIS_SESSION) return; GLOBAL_SCORE-=m.unlockCost; MAP_UNLOCKS=m.levelReq; HAS_UNLOCKED_THIS_SESSION=true; saveProgress(); rUI(); };
+                        mb.style.borderColor='#ffaa00'; mb.style.color='#ffaa00';
+                    } else if (!mu) mb.disabled = true;
+                    else mb.onclick = () => { currMapId = m.id; document.getElementById('hud-screen').classList.remove('hidden'); gui.garage.classList.add('hidden'); g.startGame(currV, currMapId); };
+                    ml.appendChild(mb);
+                });
+                sel(currV);
+            }
+
+            function sel(i) {
+                let v = VEHICLES[i];
+                document.getElementById('vehicle-name').innerText = `[${v.tier}] ${v.name}`;
+                document.getElementById('vehicle-stats').innerText = `SPD: ${v.s} | ACC: ${v.a}`;
+                const c = document.getElementById('garage-canvas'), xc = c.getContext('2d'); xc.clearRect(0,0,200,150);
+                xc.drawImage(v.sp, 100 - (v.w*3), 75 - (v.h*3), v.w*6, v.h*6);
+            }
+
+            document.getElementById('btn-restart').onclick = () => { gui.ov.classList.add('hidden'); gui.garage.classList.remove('hidden'); rUI(); };
+            document.getElementById('btn-try-again').onclick = () => { gui.ov.classList.add('hidden'); document.getElementById('hud-screen').classList.remove('hidden'); g.startGame(currV, currMapId); };
+            rUI();
+        });
     </script>
 </body>
 </html>
