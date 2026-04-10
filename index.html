@@ -3,12 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Indian Traffic Arcade Game - DesiDrive</title>
+    <title>Indian Traffic Arcade Game - V8 (Gesture Edition)</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-    <!-- MediaPipe Hands SDK -->
+    
+    <!-- MediaPipe Multi-Hand tracking SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
     <style>
         :root {
             --bg-color: #000; --text-primary: #00ffff; --text-warning: #ffaa00;
@@ -43,10 +45,24 @@
         .screen.hidden { display: none; }
         
         h1 { font-size: 2.5rem; margin-top: 1rem; margin-bottom: 2rem; color: #ff0055; text-shadow: 0 0 15px #ff0055; line-height: 1.4; flex-shrink: 0;}
+        h1.red { color: var(--text-danger); text-shadow: 0 0 20px var(--text-danger); }
+        h1.green { color: var(--text-success); text-shadow: 0 0 20px var(--text-success); }
         h2 { font-size: 1.2rem; margin: 2rem 0 1rem; color: var(--text-warning); text-shadow: 0 0 10px var(--text-warning); }
-        h3 { font-size: 0.9rem; margin: 1rem 0 0.5rem; color: var(--text-primary); text-align: left; width:100%; }
+        h3 { font-size: 0.9rem; margin: 1rem 0 0.5rem; color: var(--text-primary); text-shadow: 0 0 10px var(--text-primary); text-align: left; width:100%; }
         p { font-size: 0.7rem; line-height: 2; margin-bottom: 1rem; text-align: left; width:100%; color:#aaa; }
         .center-p { text-align: center; color: var(--text-warning); }
+        
+        .scroll-hint { font-size: 0.8rem; color: var(--text-success); animation: bounce 1.5s infinite; margin-top: 1rem; margin-bottom: 2rem; text-align: center; width:100% }
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(10px); } }
+
+        .instruction-manual { width: 100%; max-width: 500px; text-align: left; border-left: 2px solid #333; padding-left: 1rem; margin-bottom: 2rem;}
+
+        .garage-preview {
+            width: 200px; height: 150px; border: 4px solid var(--text-primary); box-shadow: 0 0 15px var(--text-primary);
+            margin: 1rem auto; display: flex; justify-content: center; align-items: center; background: #111; flex-shrink: 0;
+        }
+        .garage-preview canvas { width: 100%; height: 100%; image-rendering: pixelated; }
+
         .btn-group { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; max-width: 500px; margin: 1rem auto; }
         
         button {
@@ -55,90 +71,224 @@
             padding: 1rem; cursor: pointer; text-transform: uppercase;
             box-shadow: 0 0 10px rgba(0, 255, 255, 0.3); transition: all 0.2s ease;
         }
-        button:hover { background-color: var(--text-primary); color: #000; box-shadow: 0 0 25px var(--text-primary); }
-        button:disabled { border-color: #444; color: #444; cursor: not-allowed; }
-
-        .garage-preview {
-            width: 200px; height: 150px; border: 4px solid var(--text-primary); margin: 1rem auto;
-            display: flex; justify-content: center; align-items: center; background: #111;
-        }
+        button:hover:not(:disabled) { background-color: var(--text-primary); color: #000; box-shadow: 0 0 25px var(--text-primary); }
+        button:disabled { border-color: #444; color: #444; cursor: not-allowed; box-shadow: none; }
+        
+        #hud-screen { background: transparent; pointer-events: none; justify-content: space-between; overflow: hidden; padding: 0;}
         .hud-top {
             display: flex; justify-content: space-between; width: 100%; padding: 1rem;
-            background: rgba(0,0,0,0.8); font-size: 0.8rem; border-bottom: 4px solid var(--text-primary);
+            background: rgba(0,0,0,0.8); font-size: 0.8rem; text-shadow: 1px 1px 0 #000; border-bottom: 4px solid var(--text-primary);
         }
+        
         #fuel-container { position:relative; width:150px; height:15px; border:2px solid var(--text-fuel); margin-top:5px; }
-        #fuel-bar { width:100%; height:100%; background-color: var(--text-fuel); }
+        #fuel-bar { width:100%; height:100%; background-color: var(--text-fuel); transition: width 0.2s; box-shadow: 0 0 10px var(--text-fuel); }
+
         .hud-indicators { position: absolute; bottom: 2rem; left: 0; width: 100%; display: flex; justify-content: space-between; padding: 0 1rem; }
         .ind-box {
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            border: 4px solid #333; background: #0a0a0a; padding: 10px; width: 140px; opacity: 0.4;
+            border: 4px solid #333; background: #0a0a0a; padding: 10px; width: 140px; opacity: 0.4; transition: all 0.2s ease; border-radius: 5px;
         }
-        .ind-box.active { opacity: 1; border-color: var(--text-warning); box-shadow: 0 0 30px var(--text-warning); }
+        .ind-box span { font-size: 0.6rem; margin-top: 5px; color: #555; text-align: center; }
+        .ind-arrow { font-size: 2rem; color: #333; }
+        .ind-box.active { opacity: 1; border-color: var(--text-warning); background: #1a1a00; box-shadow: 0 0 30px var(--text-warning); }
+        .ind-box.active span { color: var(--text-warning); text-shadow: 0 0 10px var(--text-warning); font-weight: bold; }
+        .ind-box.active .ind-arrow { color: var(--text-warning); text-shadow: 0 0 20px var(--text-warning); animation: blinkInd 0.5s infinite; }
+
+        #strike-ui { position: absolute; top: 120px; left: 10px; color: var(--text-danger); font-size: 0.8rem; text-shadow: 0 0 10px #ff0000; }
+        #lane-strike-ui { position: absolute; top: 140px; left: 10px; color: var(--text-danger); font-size: 0.8rem; text-shadow: 0 0 10px #ff0000; }
+
+        #messages-area { position: absolute; top: 40%; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 1rem; z-index: 10;}
+        .floating-message { font-size: 1.2rem; color: var(--text-success); text-shadow: 2px 2px 0 #000, 0 0 15px currentColor; animation: floatUp 2s forwards; text-align: center;}
+        .floating-message.penalty { color: var(--text-danger); font-size: 1.4rem; text-shadow: 0 0 20px currentColor;}
+        
+        #traffic-light-hud {
+            position: absolute; top: 80px; right: 20px; width: 40px; height: 110px;
+            background: #111; border: 4px solid #333; display: flex; flex-direction: column; align-items: center; justify-content: space-evenly; padding: 5px; opacity: 0;
+        }
+        #traffic-light-hud.visible { opacity: 1; }
         .light-bulb { width: 20px; height: 20px; background: #222; }
         .light-bulb.red.active { background: #ff0055; box-shadow: 0 0 20px #ff0055; }
         .light-bulb.yellow.active { background: #ffaa00; box-shadow: 0 0 20px #ffaa00; }
         .light-bulb.green.active { background: #00ff66; box-shadow: 0 0 20px #00ff66; }
+
+        /* Hand Feedback HUD */
+        #hand-hud {
+            position: absolute; top: 10px; right: 10px; width: 140px; height: 105px;
+            border: 2px solid var(--text-primary); background: #000; z-index: 1000;
+            overflow: hidden; pointer-events: none; opacity: 0.8;
+        }
+        #output-canvas { width: 100%; height: 100%; transform: scaleX(-1); }
+        #hand-status {
+            position: absolute; bottom: 0; width: 100%; background: rgba(0,0,0,0.8);
+            color: #0f0; font-size: 7px; text-align: center; padding: 2px;
+        }
     </style>
 </head>
 <body>
     <div id="game-container">
         <canvas id="game-canvas"></canvas>
         
-        <!-- Hand Tracking UI Overlay -->
-        <div id="hand-tracking-container" style="position:absolute; top:10px; right:10px; width:120px; height:90px; border:2px solid var(--text-primary); z-index:100; background:#000; overflow:hidden; opacity:0.7;">
+        <!-- Gesture Display -->
+        <div id="hand-hud">
             <video id="input-video" style="display:none;"></video>
-            <canvas id="output-canvas" style="width:100%; height:100%; transform: scaleX(-1);"></canvas>
-            <div id="hand-status" style="position:absolute; bottom:0; width:100%; background:rgba(0,0,0,0.8); color:#0f0; font-size:8px; text-align:center; font-family:monospace; padding:2px;">WAITING...</div>
+            <canvas id="output-canvas"></canvas>
+            <div id="hand-status">WAITING...</div>
         </div>
 
         <div id="ui-layer">
             <div id="garage-screen" class="screen">
-                <h1>GARAGE</h1>
-                <div class="garage-preview"><canvas id="garage-canvas"></canvas></div>
-                <h2 id="vehicle-name">VEHICLE</h2>
+                <h1 style="margin-bottom:0.5rem">GARAGE</h1>
+                <div class="scroll-hint">↓ SCROLL FOR MANUAL & GESTURES ↓</div>
+                
+                <div class="instruction-manual">
+                    <h3 style="color:#00ff66">STRICT GESTURES</h3>
+                    <p style="color:#fff">> [BOTH PALMS UP] ACCELERATE 👋👋<br>> [ANY FIST] BRAKE ✊<br>> [TILT HANDS] STEER / SWERVE<br>> [HOLD PEACE SIGN 0.3s] INDICATORS ✌️</p>
+                    
+                    <h3>OBJECTIVES</h3>
+                    <p>> Do not idle! Fuel runs out constantly.<br>> Earn Fuel by making safe plays (Indicators, Red Lights).</p>
+
+                    <h3>SYSTEM RULES</h3>
+                    <p style="color:#ffaa00">> 1. SOLID RED LINES: DO NOT shift lanes.<br>> 2. TRAFFIC LIGHTS: Obey signals.<br>> 3. 3-STRIKE LAW: Trigger 3 violations and it's GAME OVER.</p>
+                </div>
+                
+                <hr style="width: 80%; border-color:#333; margin: 1rem 0;">
+                <h2>PTS: <span id="global-score-ui">0</span></h2>
+                <div style="text-align:center; width:100%; margin-bottom:1rem;"><span id="next-unlock-info" style="color:#ff0055; font-size:0.7rem;"></span></div>
+                
+                <div class="garage-preview" id="garage-preview-container"><canvas id="garage-canvas"></canvas></div>
+                <p id="vehicle-name" style="color:#ffaa00; font-size: 1rem; text-shadow: 0 0 10px #ffaa00; text-align:center;"></p>
+                <p id="vehicle-stats" style="font-size:0.6rem; color:#aaa; text-align:center;"></p>
                 <div class="btn-group" id="vehicle-list"></div>
-                <h2>MAPS</h2>
-                <div class="btn-group" id="map-list" style="flex-direction:column;"></div>
-                <hr style="width:80%; margin:1rem 0; border-color:#333;">
-                <p id="global-score-ui" style="text-align:center; width:100%;">PTS: 0</p>
+                
+                <hr style="width: 80%; border-color:#333; margin: 1rem 0;">
+                <h2>MAP PROGRESSION</h2>
+                <div class="btn-group" id="map-list" style="flex-direction: column;"></div>
             </div>
 
-            <div id="hud-screen" class="screen hidden" style="background:transparent; pointer-events:none; justify-content:space-between; padding:0;">
+            <div id="hud-screen" class="screen hidden">
                 <div class="hud-top">
-                    <div>PTS: <span id="score">0</span><br>SPD: <span id="speed">0</span></div>
-                    <div>FUEL<div id="fuel-container"><div id="fuel-bar"></div></div>DIST: <span id="dist">0</span></div>
+                    <div>PTS: <span id="score" style="color:#00ffff">0</span><br><br>SPD: <span id="speed">0</span></div>
+                    <div><span id="fuel-label">FUEL</span><div id="fuel-container"><div id="fuel-bar"></div></div><br>DIST: <span id="dist">0</span></div>
                 </div>
+                <div id="strike-ui"></div><div id="lane-strike-ui"></div>
+                <div id="traffic-light-hud"><div id="tl-red" class="light-bulb red"></div><div id="tl-yellow" class="light-bulb yellow"></div><div id="tl-green" class="light-bulb green"></div></div>
                 <div class="hud-indicators">
-                    <div id="ind-left-box" class="ind-box"><span>LEFT</span></div>
-                    <div id="ind-right-box" class="ind-box"><span>RIGHT</span></div>
+                    <div id="ind-left-box" class="ind-box"><div class="ind-arrow">&lt;</div><span id="lbl-ind-l">[Q] LEFT IND OFF</span></div>
+                    <div id="ind-right-box" class="ind-box"><div class="ind-arrow">&gt;</div><span id="lbl-ind-r">[E] RIGHT IND OFF</span></div>
                 </div>
-                <div id="messages-area" style="position:absolute; top:40%; width:100%; pointer-events:none;"></div>
+                <div id="messages-area"></div>
             </div>
 
-            <div id="game-over-screen" class="screen hidden">
-                <h1>WASTED!</h1>
-                <p id="game-over-reason"></p>
+            <!-- Game over and level complete same as original -->
+            <div id="game-over-screen" class="screen hidden" style="justify-content:center;">
+                <h1 id="game-over-title" class="red">WASTED!</h1>
+                <p id="game-over-reason" style="color:#ff0055; margin: 1rem 0; font-size: 0.8rem; text-align:center;"></p>
+                <div style="background:rgba(0,0,0,0.8); border:2px solid #555; padding:1.5rem; width:90%; max-width:400px; margin-bottom:1.5rem;">
+                    <p style="color:#00ffff; font-size:1rem; font-weight:bold;">SCORE: <span id="final-score">0</span></p>
+                    <div id="smart-feedback-container" style="text-align:left; margin-top:15px;"></div>
+                </div>
                 <div class="btn-group">
-                    <button id="btn-restart">GARAGE</button>
-                    <button id="btn-try-again">TRY AGAIN</button>
+                    <button id="btn-restart" style="min-width: 140px;">GARAGE</button>
+                    <button id="btn-try-again" style="min-width: 140px; color: #ff0055; border-color: #ff0055;">TRY AGAIN</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <script type="module">
-        import { HandController } from './js/HandController.js';
+    <!-- MAIN ENGINE -->
+    <script>
+        /**
+         * REFINED GESTURE CONTROLLER
+         */
+        class HandController {
+            constructor() {
+                this.v = document.getElementById('input-video');
+                this.c = document.getElementById('output-canvas');
+                this.ctx = this.c.getContext('2d');
+                this.st = document.getElementById('hand-status');
+                this.state = { accel: false, brake: false, steering: 0, indL: false, indR: false };
+                this.timers = { l: 0, r: 0 }; this.init = false;
+            }
+            async start() {
+                if (this.init) return;
+                const h = new Hands({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
+                h.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
+                h.onResults(this.onResults.bind(this));
+                const cam = new Camera(this.v, { onFrame: async () => { await h.send({ image: this.v }); }, width: 640, height: 480 });
+                cam.start(); this.init = true;
+            }
+            onResults(res) {
+                this.ctx.save(); this.ctx.clearRect(0, 0, 140, 105);
+                this.ctx.drawImage(res.image, 0, 0, 140, 105);
+                let accelS = false, brakeS = false, steerS = 0, indLS = false, indRS = false;
+                if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
+                    let stSum = 0, palms = 0;
+                    res.multiHandLandmarks.forEach((l, i) => {
+                        drawConnectors(this.ctx, l, HAND_CONNECTIONS, { color: '#00ffff', lineWidth: 1 });
+                        const isFist = l[8].y > l[6].y && l[12].y > l[10].y && l[16].y > l[14].y && l[20].y > l[18].y;
+                        const isPeace = l[8].y < l[6].y && l[12].y < l[10].y && l[16].y > l[14].y && l[20].y > l[18].y;
+                        const isPalm = l[8].y < l[6].y && l[12].y < l[10].y && l[16].y < l[14].y && l[20].y < l[18].y;
+                        if (isFist) brakeS = true;
+                        if (isPalm) palms++;
+                        if (isPeace) { if (l[0].x > 0.5) indLS = true; else indRS = true; }
+                        stSum += (l[0].x - 0.5) * 2;
+                    });
+                    if (palms === 2 && res.multiHandLandmarks.length === 2) accelS = true;
+                    steerS = stSum / res.multiHandLandmarks.length;
+                }
+                const now = performance.now();
+                if (indLS) { if(!this.timers.lastL) this.timers.lastL = now; if(now-this.timers.lastL > 300) this.state.indL = true; } else { this.timers.lastL = null; this.state.indL = false; }
+                if (indRS) { if(!this.timers.lastR) this.timers.lastR = now; if(now-this.timers.lastR > 300) this.state.indR = true; } else { this.timers.lastR = null; this.state.indR = false; }
+                this.state.accel = accelS; this.state.brake = brakeS; this.state.steering = -steerS;
+                this.st.innerText = `${accelS?'FIRE':''} ${brakeS?'STOP':''} ST:${steerS.toFixed(1)}`;
+                this.ctx.restore();
+            }
+        }
 
-        // Core original arrays and sprites
+        // ORIGINAL V8 GAME ENGINE START...
+        function gen(w, h, data, pal) {
+            const c = document.createElement('canvas'); c.width=w; c.height=h; const x = c.getContext('2d');
+            for(let y=0; y<h; y++) for(let k=0; k<w; k++) { let d=data[y*w+k]; if(d>0){x.fillStyle=pal[d]; x.fillRect(k,y,1,1);} }
+            return c;
+        }
+        const AudioSys = { 
+            ctx: null, init() { if(!this.ctx) this.ctx = new (window.AudioContext||window.webkitAudioContext)(); },
+            playCrash(t){ console.log("CRASH", t); }, playEngine(t){}, stopEngine(){}
+        };
+        const PALS = {
+            human: {1:'#fff', 2:'#ff0055', 3:'#00ffff', 4:'#222'}, cow: {1:'#fff', 2:'#111'}, buffalo: {1:'#333', 2:'#000'},
+            bike: {1:'#111', 2:'#ff0055', 3:'#fff', 4:'#444'}, auto: {1:'#111', 2:'#ffaa00', 3:'#222', 4:'#fff'}
+        };
+        const dBike = [0,0,0,0,1,1,0,0,0,0, 0,0,0,1,1,1,1,0,0,0, 0,0,1,1,1,1,1,1,0,0, 0,0,1,2,3,3,2,1,0,0, 0,0,0,2,2,2,2,0,0,0, 0,0,0,2,2,2,2,0,0,0, 0,0,1,4,4,4,4,1,0,0, 0,1,1,4,4,4,4,1,1,0, 0,1,0,2,2,2,2,0,1,0, 0,0,0,2,2,2,2,0,0,0, 0,0,0,2,4,4,2,0,0,0, 0,0,0,2,2,2,2,0,0,0, 0,0,1,4,4,4,4,1,0,0, 0,1,1,4,4,4,4,1,1,0, 0,1,0,1,1,1,1,0,1,0, 0,0,0,0,1,1,0,0,0,0];
+        const dAuto = [0,0,0,0,0,1,1,0,0,0,0,0, 0,0,0,1,1,1,1,0,0,0, 0,0,0,2,2,3,3,2,2,0, 0,0,2,3,3,4,4,3,3,2, 0,0,4,4,4,4,4,4,4,4, 1,2,3,3,3,3,3,3,3,3,2,1, 1,2,3,3,3,3,3,3,3,3,2,1, 1,2,1,1,1,1,1,1,1,1,2,1, 0,2,1,1,1,1,1,1,1,1,2,0, 0,2,1,1,1,1,1,1,1,1,2,0, 0,2,1,1,1,1,1,1,1,1,2,0, 1,2,2,2,2,2,2,2,2,2,2,1, 1,2,2,2,2,2,2,2,2,2,2,1, 0,0,0,0,0,0,0,0,0,0,0,0];
+        const dCow = [0,0,0,0,1,1,1,1,0,0,0,0, 0,0,1,2,1,1,1,1,2,1,0,0, 0,1,1,1,1,1,1,1,1,1,1,0, 0,1,1,1,1,1,1,1,1,1,1,0, 0,1,1,1,1,1,1,1,1,1,1,0, 0,1,1,1,1,2,2,1,1,1,1,0, 0,1,1,1,1,1,1,1,1,1,1,0, 0,1,1,1,1,1,1,1,1,1,1,0, 0,1,1,1,1,1,2,2,1,1,1,0, 0,1,1,1,1,1,1,1,1,1,1,0, 0,1,1,2,1,1,1,1,2,1,1,0, 0,0,0,2,0,0,0,0,2,0,0,0];
+        const dHum1 = [0,0,0,4,4,0,0,0, 0,0,4,1,1,4,0,0, 0,0,4,4,4,4,0,0, 0,4,3,3,3,3,4,0, 4,3,3,3,3,3,3,4, 4,4,3,3,3,3,4,4, 0,4,2,2,0,2,4,0, 0,0,4,4,0,0,0,0];
+        const dHum2 = [0,0,0,4,4,0,0,0, 0,0,4,1,1,4,0,0, 0,0,4,4,4,4,0,0, 0,4,3,3,3,3,4,0, 4,3,3,3,3,3,3,4, 4,4,3,3,3,3,4,4, 0,4,2,0,2,2,4,0, 0,0,0,0,4,4,0,0];
+        const dHole = new Array(400).fill(0); for(let y=0;y<20;y++) for(let x=0;x<20;x++){ let ds=Math.sqrt((x-10)**2+(y-10)**2); if(ds<7){dHole[y*20+x]=(ds>4.5)?1:2;} }
+        const dBreak = new Array(600).fill(0); for(let y=0;y<10;y++) for(let x=0;x<60;x++){ if(y<2)dBreak[y*60+x]=4; else if(y>7)dBreak[y*60+x]=3; else dBreak[y*60+x]=((Math.floor(x/10))%2===0?1:2); }
+
+        const SPRITES = {
+            hum1: gen(8, 8, dHum1, PALS.human), hum2: gen(8, 8, dHum2, PALS.human),
+            cow: gen(12, 12, dCow, PALS.cow), buffalo: gen(16, 16, dCow, PALS.buffalo),
+            bikeBlue: gen(10,16, dBike, {1:'#0055ff', 2:'#00aaff', 3:'#fff', 4:'#111'}),
+            bikeBlack: gen(10,16, dBike, {1:'#222', 2:'#444', 3:'#fff', 4:'#000'}),
+            bikeGreen: gen(10,16, dBike, {1:'#00ff00', 2:'#55ff55', 3:'#fff', 4:'#111'}),
+            bwm: gen(24, 40, dAuto, {1:'#111', 2:'#fff', 3:'#ccc', 4:'#111'}),
+            hole: gen(20, 20, dHole, {1:'#ff0033', 2:'#ffee00'}), breaker: gen(60, 10, dBreak, {1:'#ffee00', 2:'#000000', 3:'#0a0a0a', 4:'#ffffee'})
+        };
+
         const VEHICLES = [
-            { id: 'hjonda', name: 'HONDA SPLENDER', cost: 0, s: 12, a: 0.1, spColor: '#00ffff', w:10, h:16 },
-            { id: 'bullett', name: 'BULLETT ENFIELD', cost: 500, s: 14, a: 0.08, spColor: '#ffaa00', w:10, h:18 },
-            { id: 'ninja', name: 'NINJA ZX', cost: 3000, s: 18, a: 0.2, spColor: '#00ff66', w:10, h:16 }
+            { id: 'hjonda', name: 'HONDA SPLENDER', cost: 0, s: 12, a: 0.12, sp: SPRITES.bikeBlue, w:10, h:16 },
+            { id: 'bullett', name: 'BULLETT ENFIELD', cost: 500, s: 14, a: 0.1, sp: SPRITES.bikeBlack, w:10, h:18 },
+            { id: 'ninja', name: 'NINJA ZX', cost: 3000, s: 18, a: 0.22, sp: SPRITES.bikeGreen, w:10, h:16 },
+            { id: 'bwm', name: 'BWM M-SERIES', cost: 6000, s: 24, a: 0.28, sp: SPRITES.bwm, w:24, h:40 }
         ];
+
         const MAPS = [
-            { id: 'hyderabad', name: 'HYDERABAD BLOCKS' },
-            { id: 'highway', name: 'NATIONAL HIGHWAY' },
-            { id: 'offroad', name: 'MP OFF-ROAD' }
+            { id: 'hyderabad', name: 'HYDERABAD BLOCKS', unlockCost: 0, levelReq: 0 },
+            { id: 'delhi', name: 'DELHI CHAOS', unlockCost: 0, levelReq: 0 },
+            { id: 'mumbai', name: 'MUMBAI RUSH', unlockCost: 0, levelReq: 0 },
+            { id: 'offroad', name: 'ROADS YA OFF-ROADS?', unlockCost: 0, levelReq: 0 }
         ];
 
         let GLOBAL_SCORE = parseInt(localStorage.getItem('v8_score')) || 0;
@@ -148,94 +298,133 @@
             constructor() {
                 this.c = document.getElementById('game-canvas'); this.ctx = this.c.getContext('2d');
                 this.c.width = 600; this.c.height = 800;
-                this.keys = {}; this.handCtrl = new HandController();
-                window.addEventListener('keydown', e => this.keys[e.key] = true);
-                window.addEventListener('keyup', e => this.keys[e.key] = false);
+                this.keys = {}; this.ind = { l:false, r:false };
+                this.hand = new HandController();
+                window.onkeydown = e => { this.keys[e.key]=true; if(e.key==='q'||e.key==='Q'){this.ind.l=!this.ind.l;this.ind.r=false;this.upUI();} if(e.key==='e'||e.key==='E'){this.ind.r=!this.ind.r;this.ind.l=false;this.upUI();} };
+                window.onkeyup = e => this.keys[e.key]=false;
                 this.isPlaying = false;
-                this.boundLoop = this.loop.bind(this);
             }
-
+            upUI() { 
+                document.getElementById('ind-left-box').className='ind-box'+(this.ind.l?' active':''); 
+                document.getElementById('ind-right-box').className='ind-box'+(this.ind.r?' active':'');
+                document.getElementById('lbl-ind-l').innerText = this.ind.l ? '[Q] LEFT ON' : '[Q] LEFT OFF';
+                document.getElementById('lbl-ind-r').innerText = this.ind.r ? '[E] RIGHT ON' : '[E] RIGHT OFF';
+            }
+            msg(t, bad=false) {
+                const el = document.getElementById('messages-area');
+                const d = document.createElement('div'); d.className = 'floating-message' + (bad?' penalty':''); d.innerText = t;
+                el.appendChild(d); setTimeout(() => { if(el.contains(d)) el.removeChild(d); }, 2000);
+            }
+            addScore(pts, r) { this.score += pts; if(pts>0 && r) this.msg(`+${pts} ${r}`); else if(pts<0 && r) this.msg(`${pts} ${r}`, true); }
+            
             startGame(vIdx, mapId) {
-                this.handCtrl.start(); this.vConf = VEHICLES[vIdx]; this.mapId = mapId;
-                this.isPlaying = true; this.score = 0; this.fuel = 100;
-                this.p = { x: 300, y: 650, speed: 0, angle: 0, logY: 0 };
-                this.em = []; this.lastTime = performance.now();
-                requestAnimationFrame(this.boundLoop);
+                this.v = VEHICLES[vIdx]; this.mapId = mapId; this.isPlaying = true;
+                this.score = 0; this.fuel = 100; this.p = { x:300, y:650, speed:0, angle:0, logY:0, lane:1 };
+                this.em = []; this.lights = { state:'green', timer:5000, block:4000 };
+                this.lastTime = performance.now(); this.hand.start();
+                requestAnimationFrame(this.loop.bind(this));
             }
-
-            stop(reason) {
-                this.isPlaying = false; GLOBAL_SCORE += Math.floor(this.score);
-                localStorage.setItem('v8_score', GLOBAL_SCORE);
+            stop(r) {
+                this.isPlaying = false; GLOBAL_SCORE += Math.floor(this.score); localStorage.setItem('v8_score', GLOBAL_SCORE);
                 document.getElementById('hud-screen').classList.add('hidden');
                 document.getElementById('game-over-screen').classList.remove('hidden');
-                document.getElementById('game-over-reason').innerText = reason;
+                document.getElementById('game-over-reason').innerText = r;
+                document.getElementById('final-score').innerText = Math.floor(this.score);
+                let feeds = r.includes('CRASH') ? "Police are on the way!" : "Improve your fuel management!";
+                document.getElementById('smart-feedback-container').innerHTML = `<p>${feeds}</p>`;
             }
-
             update(dt) {
-                this.fuel -= (dt/1000) * 1.5; if(this.fuel <= 0) return this.stop("OUT OF FUEL");
-                let p = this.p;
-                
-                let brake = this.keys.ArrowDown || this.handCtrl.state.brake;
-                let accel = this.keys.ArrowUp || this.handCtrl.state.accel;
-                let st = this.handCtrl.state.steering;
-                if(this.keys.ArrowLeft) st = -1; if(this.keys.ArrowRight) st = 1;
+                this.fuel -= (dt/1000) * 1.5; if(this.fuel<=0) return this.stop("OUT OF FUEL");
+                const gst = this.hand.state;
+                if(gst.indL && !this.lIndL) { this.ind.l=!this.ind.l; this.ind.r=false; this.upUI(); }
+                if(gst.indR && !this.lIndR) { this.ind.r=!this.ind.r; this.ind.l=false; this.upUI(); }
+                this.lIndL=gst.indL; this.lIndR=gst.indR;
 
-                if(accel) p.speed += this.vConf.a; else if(brake) p.speed -= 0.6; else p.speed -= 0.05;
-                if(p.speed < 0) p.speed = 0; if(p.speed > this.vConf.s) p.speed = this.vConf.s;
-                
-                p.logY += p.speed * (dt/16); p.x += st * 5;
-                if(p.x < 150) p.x=150; if(p.x > 450) p.x=450;
+                let acc = this.keys.ArrowUp || gst.accel;
+                let brk = this.keys.ArrowDown || gst.brake;
+                let st = gst.steering; if(this.keys.ArrowLeft) st=-1; else if(this.keys.ArrowRight) st=1;
 
-                // Simple collision
-                if(Math.random() < 0.01) this.em.push({y: -100, x: 150+Math.random()*300});
-                for(let i=this.em.length-1; i>=0; i--) {
-                    this.em[i].y += 5; if(this.em[i].y > 800) this.em.splice(i,1);
-                    else if(Math.abs(this.em[i].y - 650) < 30 && Math.abs(this.em[i].x - p.x) < 30) this.stop("CRASH!");
+                if(acc) this.p.speed += this.v.a; else if(brk) this.p.speed -= 0.6; else this.p.speed -= 0.05;
+                if(this.p.speed<0) this.p.speed=0;
+                let maxS = this.mapId === 'mumbai' ? this.v.s*1.3 : this.v.s;
+                if(this.p.speed>maxS) this.p.speed=maxS;
+
+                this.p.logY += this.p.speed * (dt/16);
+                if(this.p.speed>0) { this.p.x += st * (this.v.s*0.2); this.p.angle = st*0.1; }
+                if(this.p.x<150) this.p.x=150; if(this.p.x>450) this.p.x=450;
+
+                let cl = this.p.x<233?0:this.p.x<366?1:2;
+                if(cl!==this.p.lane) { 
+                    this.p.lane=cl; 
+                    let distT = this.lights.block - (this.p.logY % this.lights.block);
+                    if(distT<400 && distT>0) this.addScore(-20, "SOLID LINE ERROR"); 
                 }
 
-                document.getElementById('score').innerText = Math.floor(this.score++);
-                document.getElementById('speed').innerText = Math.floor(p.speed*10);
-                document.getElementById('dist').innerText = Math.floor(p.logY);
-                document.getElementById('fuel-bar').style.width = this.fuel + '%';
-            }
+                this.lights.timer-=dt;
+                if(this.lights.timer<=0) {
+                    if(this.lights.state==='green'){this.lights.state='yellow';this.lights.timer=2000;}
+                    else if(this.lights.state==='yellow'){this.lights.state='red';this.lights.timer=5000;}
+                    else {this.lights.state='green';this.lights.timer=6000;}
+                }
 
+                // DELHI CHAOS & Obstacle logic restored
+                if(Math.random()<0.02) {
+                    let type='v'; if(this.mapId==='offroad' && Math.random()>0.8) type='h'; 
+                    this.em.push({ logY:this.p.logY+800, x:150+Math.random()*300, s:4+Math.random()*4, t:type, sp:type==='v'?SPRITES.bwm:SPRITES.hole });
+                }
+                for(let i=this.em.length-1; i>=0; i--) {
+                    let e = this.em[i]; e.logY += e.s;
+                    if(e.logY < this.p.logY-200) this.em.splice(i,1);
+                    else if(Math.abs(e.logY-this.p.logY)<40 && Math.abs(e.x-this.p.x)<30) return this.stop(e.t==='v'?"TRAFFIC CRASH!":"ROAD HAZARD!");
+                }
+                
+                document.getElementById('score').innerText = Math.floor(this.score += this.p.speed*0.01);
+                document.getElementById('speed').innerText = Math.floor(this.p.speed*10);
+                document.getElementById('dist').innerText = Math.floor(this.p.logY);
+                document.getElementById('fuel-bar').style.width = this.fuel+'%';
+            }
             draw() {
-                this.ctx.fillStyle = '#050505'; this.ctx.fillRect(0,0,600,800);
-                this.ctx.fillStyle = '#111'; this.ctx.fillRect(150,0,300,800);
-                this.ctx.fillStyle = this.vConf.spColor; this.ctx.fillRect(this.p.x-10, this.p.y-15, 20, 30);
-                this.ctx.fillStyle = '#ff0000'; this.em.forEach(e => this.ctx.fillRect(e.x-10, e.y-10, 20, 20));
+                this.ctx.fillStyle='#050505'; this.ctx.fillRect(0,0,600,800);
+                this.ctx.fillStyle='#111'; this.ctx.fillRect(100,0,400,800);
+                let distT = this.lights.block - (this.p.logY % this.lights.block);
+                this.ctx.fillStyle= (distT<400&&distT>0)?'#ff0055':'rgba(255,255,255,0.2)';
+                this.ctx.fillRect(233, 0, 4, 800); this.ctx.fillRect(366, 0, 4, 800);
+                
+                this.em.forEach(e=>{
+                    let sy=650-(e.logY-this.p.logY); this.ctx.drawImage(e.sp, e.x-15, sy-20, 30, 40);
+                });
+                
+                this.ctx.save(); this.ctx.translate(this.p.x, this.p.y); this.ctx.rotate(this.p.angle);
+                this.ctx.drawImage(this.v.sp, -this.v.w, -this.v.h, this.v.w*2, this.v.h*2); this.ctx.restore();
             }
-
-            loop(t) {
-                if(!this.isPlaying) return;
-                let dt = t - (this.lastTime || t); this.lastTime = t;
-                this.update(dt); this.draw(); requestAnimationFrame(this.boundLoop);
-            }
+            loop(t) { if(!this.isPlaying) return; let dt=t-this.lastTime; this.lastTime=t; if(dt>100)dt=16; this.update(dt); this.draw(); requestAnimationFrame(this.loop.bind(this)); }
         }
 
+        const engine = new GameEngine();
+        function rUI() {
+            document.getElementById('global-score-ui').innerText = GLOBAL_SCORE;
+            const vl = document.getElementById('vehicle-list'); vl.innerHTML='';
+            VEHICLES.forEach((v, i) => {
+                const b = document.createElement('button'); b.innerText = `SELECT ${v.name}`;
+                b.onclick = () => sel(i); vl.appendChild(b);
+            });
+            const ml = document.getElementById('map-list'); ml.innerHTML = '';
+            MAPS.forEach(m => {
+                const b = document.createElement('button'); b.innerText = `PLAY ${m.name}`;
+                b.onclick = () => { engine.startGame(currV, m.id); document.getElementById('garage-screen').classList.add('hidden'); document.getElementById('hud-screen').classList.remove('hidden'); };
+                ml.appendChild(b);
+            });
+            sel(0);
+        }
+        function sel(i) {
+            currV = i; let v = VEHICLES[i]; document.getElementById('vehicle-name').innerText=v.name;
+            const c=document.getElementById('garage-canvas'); const xc=c.getContext('2d');
+            xc.clearRect(0,0,200,150); xc.drawImage(v.sp, 100-v.w*3, 75-v.h*3, v.w*6, v.h*6);
+        }
+        let currV=0;
         document.addEventListener('DOMContentLoaded', () => {
-            const g = new GameEngine();
-            const rUI = () => {
-                document.getElementById('global-score-ui').innerText = `PTS: ${GLOBAL_SCORE}`;
-                const vl = document.getElementById('vehicle-list'); vl.innerHTML = '';
-                VEHICLES.forEach((v, i) => {
-                    const b = document.createElement('button'); b.innerText = v.name;
-                    b.onclick = () => { document.getElementById('vehicle-name').innerText = v.name; };
-                    vl.appendChild(b);
-                });
-                const ml = document.getElementById('map-list'); ml.innerHTML = '';
-                MAPS.forEach(m => {
-                    const mb = document.createElement('button'); mb.innerText = m.name;
-                    mb.onclick = () => {
-                        document.getElementById('garage-screen').classList.add('hidden');
-                        document.getElementById('hud-screen').classList.remove('hidden');
-                        g.startGame(0, m.id);
-                    };
-                    ml.appendChild(mb);
-                });
-            };
             document.getElementById('btn-restart').onclick = () => location.reload();
-            document.getElementById('btn-try-again').onclick = () => location.reload();
+            document.getElementById('btn-try-again').onclick = () => { document.getElementById('game-over-screen').classList.add('hidden'); document.getElementById('hud-screen').classList.remove('hidden'); engine.startGame(currV, 'hyderabad'); };
             rUI();
         });
     </script>

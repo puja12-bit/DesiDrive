@@ -1,4 +1,4 @@
-export class HandController {
+class HandController {
     constructor() {
         this.videoElement = document.getElementById('input-video');
         this.canvasElement = document.getElementById('output-canvas');
